@@ -1,0 +1,3 @@
+number: 23, character: A
+number: 52, character: B
+number: 98, character: C

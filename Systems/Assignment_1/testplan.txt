@@ -1,0 +1,5 @@
+Ass0: Walking in GCC's Footsteps
+
+Plan:
+My test plan consisted of first figuring out how to tokenize the string, in which I made spaces and tokens into a node just in case I need to use the spaces. I then tried to make a function in which it would merge tokens that would be merged together in tokenizer (ex: 1_+__2 where '_' are spaces, the tokens would be '1' '+' ' 2' when but together).
+As a result, I made a linked list of tokens where each token would have the string, next token and type of string in each node. From here, I slowly including differnt types of erros, starting out with the ones from sakai and then browsing sakai. I figured out that the only necessary tokens needed are a previous token and a current token as all errors can be derived from such.
