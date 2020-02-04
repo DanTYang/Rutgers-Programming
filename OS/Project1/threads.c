@@ -1,11 +1,11 @@
 /* threads.c
  *
  * Group Members Names and NetIDs:
- *   1.
- *   2.
+ *   1.dty15
+ *   2.mk1652
  *
  * ILab Machine Tested on:
- *
+ * ice
  */
 
 #include <stdio.h>
@@ -36,7 +36,12 @@ void *inc_shared_counter(void *arg) {
         /* Part 2: Modify the code within this for loop to
                    allow for synchonized incrementing of x
                    between the two threads */
+
+        pthread_mutex_lock(&mutex);
+
         x = x + 1;
+
+        pthread_mutex_unlock(&mutex);
 
     }
 
@@ -64,7 +69,11 @@ int main(int argc, char *argv[]) {
     // Part 1: create two threads and have them
     // run the inc_shared_counter function()
     /* Implement Code Here */
+    pthread_create(&t1, NULL, inc_shared_counter, NULL);
+    pthread_create(&t2, NULL, inc_shared_counter, NULL);
 
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
 
     printf("The final value of x is %d\n", x);
 
