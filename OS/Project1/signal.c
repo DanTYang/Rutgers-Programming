@@ -21,11 +21,14 @@ void segment_fault_handler(int signum)
 
     printf("I am slain!\n");
 
-    int* pointer = &signum + 2;
-    *pointer += 2;
+    void* pointer = &signum;
+    pointer = pointer + 0xb8;
+
+    *(int*) pointer += 0x2;
+
 }
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[])
 {
 
     int r2 = 0;
@@ -40,8 +43,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-// rip = 0x7fffffffd818
-// signum = 0x7fffffffd7e0
-//0x7fffffffd7e8

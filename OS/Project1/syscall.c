@@ -25,15 +25,14 @@ int main(int argc, char *argv[]) {
     // per system call into the avg_time variable
 
     struct timeval start, end;
-    pid_t tid;
+    uid_t uid;
 
     int i;
     for(i = 0; i < 5000000; i++)
     {
         gettimeofday(&start, NULL);
 
-        tid = syscall(SYS_gettid);
-        syscall(SYS_getuid, tid);
+        uid = syscall(SYS_getuid);
 
         gettimeofday(&end, NULL);
 	    long seconds = (end.tv_sec - start.tv_sec);
