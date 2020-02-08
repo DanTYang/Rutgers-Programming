@@ -17,12 +17,13 @@
  * such that you get to the line after "r2 = *( (int *) 0 )"
  */
 void segment_fault_handler(int signum) 
-{
+{ 
 
+    printf("signum: %x\n", &signum);
     printf("I am slain!\n");
 
     void* pointer = &signum;
-    pointer = pointer + 0xb8;
+    pointer = pointer + 0xcc;
 
     *(int*) pointer += 0x2;
 
