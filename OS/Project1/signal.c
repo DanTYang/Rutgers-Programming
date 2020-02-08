@@ -19,7 +19,6 @@
 void segment_fault_handler(int signum) 
 { 
 
-    printf("signum: %x\n", &signum);
     printf("I am slain!\n");
 
     //We used the gdb to locate the position of signum on the stack when segment_fault_handler is called.
