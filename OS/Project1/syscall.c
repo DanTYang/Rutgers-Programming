@@ -25,6 +25,7 @@ int main(int argc, char *argv[]) {
     // per system call into the avg_time variable
 
     struct timeval start, end;
+    double totalTime = 0;
     uid_t uid;
 
     int i;
@@ -38,10 +39,10 @@ int main(int argc, char *argv[]) {
 	    long seconds = (end.tv_sec - start.tv_sec);
 	    long timeTaken = ((seconds * 1000000)  + end.tv_usec) - (start.tv_usec);
 
-        avg_time += timeTaken;
+        totalTime += timeTaken;
     }
     
-	avg_time /= 5000000;
+	avg_time = totalTime / 5000000;
 
     printf("Average time per system call is %0.4f microseconds\n", avg_time);
 

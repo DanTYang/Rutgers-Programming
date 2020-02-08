@@ -21,8 +21,12 @@ void segment_fault_handler(int signum)
 
     printf("I am slain!\n");
 
+    //We used the gdb to locate the position of signum on the stack when segment_fault_handler is called.
+    //Next, we switched info frames in order to locate the position on the stack where the instruction pointer (%rip) was stored.
+    //We created a pointer to this position, and we incremented the value by 2 in order to skip past the faulty instruction.
+
     void* pointer = &signum;
-    pointer = pointer + 0xb8;
+    pointer = pointer + 0xcc;
 
     *(int*) pointer += 0x2;
 
