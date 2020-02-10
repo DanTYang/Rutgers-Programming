@@ -83,16 +83,105 @@ URL calls allow us to specify the types of data transfers for the server. There 
  3) DELETE: allows for data to be removed from the server
  4) PUT: allows for data to be removed from the server
  
+##### Here are a couple of examples of of each type using a library as an model.
 #### 4.1 POST
 ```python
+library_list = list()
+
+@app.route("/library", methods=["POST"])
+def library():
+    body = request.get_json()
+    title = body["Title"]
+    result = {
+        "title": title,
+        "author": body["Author"]
+    }
+    library_list.append(result)
+    return "Success Added new book"
 ```
+In this example, the methods parameter in the wrapper function allows for POST methods inside the route library. We also have a post method that grabs parameters through `request.get_json()`. This allows for us to be able to grab the specific input, such as the title and author of a book, and return a success message. 
+
+Inputs can be inputed through postman as parameters, or through the URL itself, like so for this example:
+``http://127.0.0.1/library?Title="Worm"&Author="Wildbow"``
+Where a book called "Worm" by "Wildbow" would be inserted.
+
 #### 4.2 GET
+```python
+@app.route("/library", methods=["GET"])
+def restaurants():
+    return json.dumps(library_list)
+```
+In this example, we grab the list `library_list` and return it as a json. It is also possible to combine both functions, such that you get:
+```python
+library_list = list()
 
-#### 4.3 DELETE
-
+@app.route("/library", methods=["POST", "GET"])
+def library():
+    if request.method == "GET":
+        return json.dumps(library_list)
+    else:
+        body = request.get_json()
+        title = body["Title"]
+        result = {
+            "title": title,
+            "author": body["Author"]
+        }
+        library_list.append(result)
+        return "Success Added new book"
+```
 #### 4.4 PUT 
+```python
+@app.route("/library/<title>", methods=["PUT"])
+def update_book(title):
+    body=request.get_json()
+    result = {
+        "title": title,
+        "author": body["author"]
+    }
+    for temp_book in library_list:
+        if temp_book["title"] == title:
+            temp_book.update(result)
+            return title + " updated, success!"
+    return title + " book not found!"
+```
+PUT and DELETE functions typically need more specification for which item needs to be deleted, in this case, a specific book needs to be updated. Colloqiually, this is done through having a specific title to be identified,in this case the parameter "title" that we created allows us to identify which book specifically to update.
 
-#### 4.5 Postman
+This exapmle specifically grabs the updated request, and itterates through `library_list` and trys to find the title refrenced and either updates and returns success if found or returns that the title is not found and not found in the list.
+#### 4.4 DELETE
+```python
+@app.route("/library/<title>", methods=["DELETE"])
+def update_book(title):
+    for temp_book in library_list:
+        if temp_book["title"] == title:
+            library_list.remove(temp_book)
+            return "Successfully deleted " + title
+        return "Unable to delete " + title
+```
+Delete functions also require a more specific title to identify which item to delete, in this case, which title to delete.
+
+Similarly for POST and GET, we can combine the two functions into one, as such:
+```python
+@app.route("/library/<title>", methods=["PUT","DELETE"])
+def update_book(title):
+    if request.method=="PUT":
+        body=request.get_json()
+        result = {
+            "title": title,
+            "author": body["author"]
+        }
+        for temp_book in library_list:
+            if temp_book["title"] == title:
+                temp_book.update(result)
+                return title + " updated, success!"
+        return title + " book not found!"
+    else:
+        for temp_book in library_list:
+            if temp_book["title"] == title:
+                library_list.remove(temp_book)
+                return "Successfully deleted " + title
+            return "Unable to delete " + title
+```
+### Step 4.5: Postman
 
 ### Step 5: Persistance Storage.
 
