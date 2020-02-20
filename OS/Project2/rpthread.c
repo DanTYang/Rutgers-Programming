@@ -8,17 +8,50 @@
 
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
-
+runQueue head;
 
 /* create a new thread */
-int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, 
-                      void *(*function)(void*), void * arg) {
-       // Create Thread Control Block
-       // Create and initialize the context of this thread
-       // Allocate space of stack for this thread to run
-       // after everything is all set, push this thread int
-       // YOUR CODE HERE
+int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
+	// Create Thread Control Block
+    // Create and initialize the context of this thread
+    // Allocate space of stack for this thread to run
+    // after everything is all set, push this thread int
+    // YOUR CODE HERE
 	
+	tcb newthread = malloc(sizeof(tcb));
+	newThread -> tid = &thread;
+	newThread -> threadStatus = 0; 
+	newThread -> timeElapsed = 0;
+
+	ucontext_t newContext;
+
+	if (getcontext(&newContext) < 0) {
+		perror("getcontext");
+		exit(1);
+	}
+	
+	void* newStack = malloc(STACK_SIZE);
+	
+	if (newStack == NULL){
+		perror("Failed to allocate stack");
+		exit(1);
+	}
+      
+	newContext.uc_link = NULL;
+	newContext.uc_stack.ss_sp = newStack;
+	newContext.uc_stack.ss_size = STACK_SIZE;
+	newContext.uc_stack.ss_flags = 0;
+
+	makecontext(&newContext, (void *)&function, 1, (void*) arg);
+
+	newThread -> threadContext = newContext;
+
+	if (head == NULL) {
+		head = newThread;
+	} else {
+		//Do other shit
+	}
+
     return 0;
 };
 
@@ -30,6 +63,9 @@ int rpthread_yield() {
 	// switch from thread context to scheduler context
 
 	// YOUR CODE HERE
+
+	
+
 	return 0;
 };
 
@@ -103,13 +139,32 @@ static void schedule() {
 	// else if (sched == MLFQ)
 	// 		sched_mlfq();
 
-	// YOUR CODE HERE
+	// YOUR CODE HER
+rpthread.a: rpthread.o
+	$(AR) librpthread.a rpthread.o
+	$(RANLIB) librpthread.a
+
+rpthread.o: rpthread.h
+
+ifeq ($(SCHED), PSJF)
+	$(CC) -pthread $(CFLAGS) rpthread.c
+else ifeq ($(SCHED), MLFQ)
+	$(CC) -pthread $(CFLAGS) -DMLFQ rpthread.c
+else
+	echo "no such scheduling algorithm"
+endif
+
+clean:
+	rm -rf testfile *.o *.a
+E
 
 // schedule policy
 #ifndef MLFQ
 	// Choose STCF
+	sched_stcf();
 #else 
 	// Choose MLFQ
+	sched_mlfq();
 #endif
 
 }
