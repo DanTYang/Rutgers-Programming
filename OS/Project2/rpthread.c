@@ -8,7 +8,16 @@
 
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
-runQueue head;
+struct itimerval timer;
+runQueue* head;
+tcb* currentThread;
+ucontext_t schedulerContext;
+
+//Used to initialize the sigaction and timer
+int started = 0;
+
+//For finished threads, used to store return value when joins
+runQueue* finished;
 
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
@@ -18,7 +27,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
     // after everything is all set, push this thread int
     // YOUR CODE HERE
 	
-	tcb newthread = malloc(sizeof(tcb));
+	tcb* newThread = malloc(sizeof(tcb*));
 	newThread -> tid = &thread;
 	newThread -> threadStatus = 0; 
 	newThread -> timeElapsed = 0;
@@ -46,10 +55,11 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 
 	newThread -> threadContext = newContext;
 
-	if (head == NULL) {
-		head = newThread;
-	} else {
-		//Do other shit
+	enqueue(newThread);
+
+	if (!started) {
+		started = 1;
+		initialize();
 	}
 
     return 0;
@@ -57,14 +67,13 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 
 /* give CPU possession to other user-level threads voluntarily */
 int rpthread_yield() {
-	
 	// Change thread state from Running to Ready
 	// Save context of this thread to its thread control block
 	// switch from thread context to scheduler context
 
 	// YOUR CODE HERE
 
-	
+	swapcontext(&(currentThread -> threadContext), &schedulerContext);
 
 	return 0;
 };
@@ -74,12 +83,15 @@ void rpthread_exit(void *value_ptr) {
 	// Deallocated any dynamic memory created when starting this thread
 
 	// YOUR CODE HERE
+
+	free(currentThread);
+
+	schedule();
 };
 
 
 /* Wait for thread termination */
 int rpthread_join(rpthread_t thread, void **value_ptr) {
-	
 	// Wait for a specific thread to terminate
 	// De-allocate any dynamic memory created by the joining thread
   
@@ -141,14 +153,16 @@ static void schedule() {
 
 	// YOUR CODE HERE
 
-// schedule policy
-#ifndef MLFQ
-	// Choose STCF
-	sched_stcf();
-#else 
-	// Choose MLFQ
-	sched_mlfq();
-#endif
+	setitimer(ITIMER_PROF, &timer, NULL);
+
+	// schedule policy
+	#ifndef MLFQ
+		// Choose STCF
+		sched_stcf();
+	#else 
+		// Choose MLFQ
+		sched_mlfq();
+	#endif
 
 }
 
@@ -171,4 +185,26 @@ static void sched_mlfq() {
 // Feel free to add any other functions you need
 
 // YOUR CODE HERE
+
+void initialize() {
+	struct sigaction signal;
+	memset (&signal, 0, sizeof (signal));
+	signal.sa_handler = &schedule;
+	sigaction (SIGPROF, &signal, NULL);
+
+	timer.it_interval.tv_usec = 0; 
+	timer.it_interval.tv_sec = 0;
+	timer.it_value.tv_usec = 0;
+	timer.it_value.tv_sec = 1;
+
+	schedule();
+}
+
+void enqueue(tcb* threadControlBlock) {
+	if (head == NULL) {
+		head = threadControlBlock;
+	} else {
+		//Do other shit
+	}
+}
 

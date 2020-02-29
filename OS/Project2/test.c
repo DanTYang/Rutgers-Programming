@@ -10,7 +10,7 @@
 #define STACK_SIZE SIGSTKSZ
 
 struct itimerval timer;
-ucontext_t contextFoo, contextBar;
+ucontext_t contextFoo, contextBar, contextScheduler;
 int counter = 0;
 
 void scheduler(int signum){
@@ -18,12 +18,12 @@ void scheduler(int signum){
 
     if (counter == 0) {
         counter = 1;
-	    swapcontext(&contextFoo,&contextBar);
+	    swapcontext(&contextScheduler,&contextBar);
     } 
     
     if (counter == 1) {
         counter = 0;
-        swapcontext(&contextBar, &contextFoo);
+        swapcontext(&contextScheduler, &contextFoo);
     }
 }
 

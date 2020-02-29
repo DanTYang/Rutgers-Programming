@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ucontext.h>
+#include <signal.h>
+#include <sys/time.h>
 
 #define STACK_SIZE SIGSTKSZ
 
@@ -66,7 +68,7 @@ typedef struct rpthread_mutex_t {
 
 typedef struct _runQueue {
 	tcb threadControlBlock;
-	struct _runQueue next;
+	struct _runQueue* next;
 } runQueue;
 
 /* Function Declarations: */
