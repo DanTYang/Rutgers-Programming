@@ -12,6 +12,9 @@
 //Timer variable
 struct itimerval timer;
 
+//Used to initialize the sigaction and timer
+int timerSet = 0;
+
 //Context for the scheduler
 ucontext_t schedulerContext;
 
@@ -25,8 +28,8 @@ tcb* currentThread;
 //For finished threads, used to store return value when joins
 threadReturn* finishedList;
 
-//Used to initialize the sigaction and timer
-int started = 0;
+//For resetting all threads in the MLFQ (once the timer reaches 10)
+int resetMLFQ = 0;
 
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
@@ -61,15 +64,15 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	newContext.uc_stack.ss_size = STACK_SIZE;
 	newContext.uc_stack.ss_flags = 0;
 
-	makecontext(&newContext, (void *)&function, 1, (void*) arg);
+	makecontext(&newContext, (void *)&function, 0);
 
 	newThread -> threadContext = newContext;
 
-	enqueue(newThread);
+	//enqueue(newThread);
 
-	if (!started) {
-		started = 1;
-		initialize();
+	if (!timerSet) {
+		timerSet = 1;
+		setTimer();
 	}
 
     return 0;
@@ -129,6 +132,13 @@ int rpthread_join(rpthread_t thread, void **value_ptr) {
 	while (current != NULL) {
 		if (current -> tid == thread) {
 			value_ptr = &(current -> value);
+
+			if (previous == NULL)
+				finishedList = NULL;
+			else 
+				previous -> next = current -> next;
+
+			free(current);
 
 			return 0;
 		}
@@ -207,8 +217,6 @@ static void schedule() {
 
 	// YOUR CODE HERE
 
-	setitimer(ITIMER_PROF, &timer, NULL);
-
 	// schedule policy
 	#ifndef MLFQ
 		// Choose STCF
@@ -226,6 +234,23 @@ static void sched_stcf() {
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
+
+	if (currentThread != NULL) {
+		currentThread -> threadStatus = 0;
+		currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
+
+		enQueueSTCF(currentThread);
+	}
+
+	currentThread = dequeueSTCF();
+	if (currentThread != NULL) {
+		currentThread -> threadStatus = 1;
+
+		setitimer(ITIMER_PROF, &timer, NULL);
+		swapcontext(&schedulerContext, &(currentThread -> threadContext));
+	} else {
+		timerSet = 0;
+	}
 }
 
 /* Preemptive MLFQ scheduling algorithm */
@@ -240,7 +265,7 @@ static void sched_mlfq() {
 
 // YOUR CODE HERE
 
-void initialize() {
+void setTimer() {
 	struct sigaction signal;
 	memset (&signal, 0, sizeof (signal));
 	signal.sa_handler = &schedule;
@@ -254,11 +279,51 @@ void initialize() {
 	schedule();
 }
 
-void enqueue(tcb* threadControlBlock) {
-	if (head == NULL) {
-		head = threadControlBlock;
+void enqueueSTCF(tcb* threadControlBlock) {
+	runQueue* newRunQueue = malloc(sizeof(runQueue*));
+
+	newRunQueue -> threadControlBlock = threadControlBlock;
+
+	if (headSTCF == NULL) {
+		newRunQueue -> next = NULL;
+
+		headSTCF = newRunQueue;
 	} else {
-		//Do other shit
+		runQueue* previous = NULL;
+		runQueue* current = headSTCF;
+
+		int timeElapsed = threadControlBlock -> timeElapsed;
+
+		while (current != NULL) {
+			if (current -> threadControlBlock -> timeElapsed > timeElapsed) {
+				if (previous == NULL) {
+					newRunQueue -> next = headSTCF;
+
+					headSTCF = newRunQueue;
+				} else {
+					previous -> next = newRunQueue;
+					newRunQueue -> next = current;
+				}
+
+				return;
+			}
+
+			previous = current;
+			current = current -> next;
+		}
+
+		previous -> next = newRunQueue;
+		newRunQueue -> next = NULL;
 	}
+}
+
+tcb* dequeueSTCF() {
+	if (headSTCF == NULL)
+		return NULL;
+
+	tcb* runningThread = headSTCF -> threadControlBlock;
+	headSTCF = headSTCF -> next;
+
+	return runningThread;
 }
 

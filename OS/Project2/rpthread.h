@@ -46,8 +46,8 @@ typedef struct threadControlBlock {
 
 	ucontext_t threadContext;
 
+	//Time elapsed for STCF, queue position in MLFQ
 	int timeElapsed;
-
 } tcb; 
 
 /* mutex struct definition */
@@ -63,7 +63,7 @@ typedef struct rpthread_mutex_t {
 // YOUR CODE HERE
 
 typedef struct _runQueue {
-	tcb threadControlBlock;
+	tcb* threadControlBlock;
 	struct _runQueue* next;
 } runQueue;
 
