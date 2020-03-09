@@ -44,10 +44,6 @@ typedef struct threadControlBlock {
 	//2 = BLOCKED
 	int threadStatus;
 
-	//uc_link=NULL; 					I don't know what this does
-	//uc_stack.ss_sp = stack; 			The thread stack
-	//uc_stack.ss_size = STACK_SIZE; 	The thread stack size
-	//uc_stack.ss_flags = 0; 			No flags
 	ucontext_t threadContext;
 
 	int timeElapsed;
@@ -70,6 +66,12 @@ typedef struct _runQueue {
 	tcb threadControlBlock;
 	struct _runQueue* next;
 } runQueue;
+
+typedef struct _threadReturn {
+	rpthread_t tid;
+	void* value;
+	struct _threadReturn* next;
+} threadReturn;
 
 /* Function Declarations: */
 

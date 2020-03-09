@@ -8,16 +8,25 @@
 
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
+
+//Timer variable
 struct itimerval timer;
-runQueue* head;
-tcb* currentThread;
+
+//Context for the scheduler
 ucontext_t schedulerContext;
+
+//Runqueues for STCF and MLFQ
+runQueue* headSTCF;
+runQueue headMLFQ[8];
+
+//The current thread that is running
+tcb* currentThread;
+
+//For finished threads, used to store return value when joins
+threadReturn* finishedList;
 
 //Used to initialize the sigaction and timer
 int started = 0;
-
-//For finished threads, used to store return value when joins
-runQueue* finished;
 
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
@@ -25,6 +34,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
     // Create and initialize the context of this thread
     // Allocate space of stack for this thread to run
     // after everything is all set, push this thread int
+
     // YOUR CODE HERE
 	
 	tcb* newThread = malloc(sizeof(tcb*));
@@ -35,7 +45,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	ucontext_t newContext;
 
 	if (getcontext(&newContext) < 0) {
-		perror("getcontext");
+		perror("Error with getcontext");
 		exit(1);
 	}
 	
@@ -84,7 +94,23 @@ void rpthread_exit(void *value_ptr) {
 
 	// YOUR CODE HERE
 
+	if (value_ptr != NULL) {
+		threadReturn* newFinishedThread = malloc(sizeof(threadReturn*));
+
+		newFinishedThread -> tid = currentThread -> tid;
+		newFinishedThread -> value = value_ptr;
+
+		if (finishedList == NULL)
+			newFinishedThread -> next = NULL;
+		else
+			newFinishedThread -> next = finishedList;
+
+		finishedList = newFinishedThread;
+	}
+
 	free(currentThread);
+
+	currentThread = NULL;
 
 	schedule();
 };
@@ -96,6 +122,21 @@ int rpthread_join(rpthread_t thread, void **value_ptr) {
 	// De-allocate any dynamic memory created by the joining thread
   
 	// YOUR CODE HERE
+
+	threadReturn* previous = NULL;
+	threadReturn* current = finishedList;
+
+	while (current != NULL) {
+		if (current -> tid == thread) {
+			value_ptr = &(current -> value);
+
+			return 0;
+		}
+
+		previous = current;
+		current = current -> next;
+	}
+
 	return 0;
 };
 
@@ -105,18 +146,24 @@ int rpthread_mutex_init(rpthread_mutex_t *mutex,
 	//Initialize data structures for this mutex
 
 	// YOUR CODE HERE
+
+
+
 	return 0;
 };
 
 /* aquire the mutex lock */
 int rpthread_mutex_lock(rpthread_mutex_t *mutex) {
-        // use the built-in test-and-set atomic function to test the mutex
-        // When the mutex is acquired successfully, enter the critical section
-        // If acquiring mutex fails, push current thread into block list and 
-        // context switch to the scheduler thread
+	// use the built-in test-and-set atomic function to test the mutex
+	// When the mutex is acquired successfully, enter the critical section
+	// If acquiring mutex fails, push current thread into block list and 
+	// context switch to the scheduler thread
 
-        // YOUR CODE HERE
-        return 0;
+	// YOUR CODE HERE
+
+
+
+	return 0;
 };
 
 /* release the mutex lock */
@@ -126,6 +173,9 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 	// so that they could compete for mutex later.
 
 	// YOUR CODE HERE
+
+
+
 	return 0;
 };
 
@@ -133,6 +183,10 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 /* destroy the mutex */
 int rpthread_mutex_destroy(rpthread_mutex_t *mutex) {
 	// Deallocate dynamic memory created in rpthread_mutex_init
+
+	// YOUR CODE HERE
+
+
 
 	return 0;
 };
