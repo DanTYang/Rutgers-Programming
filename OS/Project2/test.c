@@ -10,26 +10,35 @@
 #define STACK_SIZE SIGSTKSZ
 
 struct itimerval timer;
+struct itimerval timerOff;
 ucontext_t contextFoo, contextBar, contextScheduler;
 int counter = 0;
+int offCounter = 0;
 
 void scheduler(int signum){
-    setitimer(ITIMER_PROF, &timer, NULL);
+	if (offCounter < 3) {
+   		setitimer(ITIMER_PROF, &timer, NULL);
 
-    if (counter == 0) {
-        counter = 1;
-	    swapcontext(&contextScheduler,&contextBar);
-    } 
-    
-    if (counter == 1) {
-        counter = 0;
-        swapcontext(&contextScheduler, &contextFoo);
-    }
+		offCounter++;
+
+		if (counter == 0) {
+			counter = 1;
+			swapcontext(&contextScheduler,&contextBar);
+		} 
+		
+		if (counter == 1) {
+			counter = 0;
+			swapcontext(&contextScheduler, &contextFoo);
+		}
+	} else {
+		setitimer(ITIMER_PROF, &timerOff, NULL);
+	}
 }
 
 void* foo() {
     while(1) {
         puts("foo");
+		setitimer(ITIMER_PROF, &timerOff, NULL);
     }
 }
 
@@ -103,6 +112,11 @@ int main(int argc, char** argv){
 	//       will never go off even if you set the interval value
 	timer.it_value.tv_usec = 0;
 	timer.it_value.tv_sec = 1;
+
+	timerOff.it_interval.tv_usec = 0; 
+	timerOff.it_interval.tv_sec = 0;
+	timerOff.it_value.tv_usec = 0;
+	timerOff.it_value.tv_sec = 0;
 
 	// Set the timer up (start the timer)
 	setitimer(ITIMER_PROF, &timer, NULL);

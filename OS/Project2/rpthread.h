@@ -55,6 +55,9 @@ typedef struct rpthread_mutex_t {
 	/* add something here */
 
 	// YOUR CODE HERE
+
+	int isLocked;
+	rpthread_t threadID;
 } rpthread_mutex_t;
 
 /* define your data structures here: */
@@ -72,6 +75,13 @@ typedef struct _threadReturn {
 	void* value;
 	struct _threadReturn* next;
 } threadReturn;
+
+typedef struct _blockedList {
+	//The tid of the thread that locked the mutex
+	rpthread_t tid;
+	tcb* threadControlBlock;
+	struct _blockedList* next;
+} blockedList;
 
 /* Function Declarations: */
 

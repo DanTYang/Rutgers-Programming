@@ -9,11 +9,15 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 
+//Used to initialize the sigaction and timer
+int didInitialize = 0;
+
 //Timer variable
 struct itimerval timer;
+struct itimerval timerOff;
 
-//Used to initialize the sigaction and timer
-int timerSet = 0;
+//If the timer is on or not
+int timerOn = 0;
 
 //Context for the scheduler
 ucontext_t schedulerContext;
@@ -28,7 +32,10 @@ tcb* currentThread = NULL;
 //For finished threads, used to store return value when joins
 threadReturn* finishedList = NULL;
 
-//For resetting all threads in the MLFQ (once the timer reaches 10)
+//Used to store blocked threads
+blockedList* blockedThreads = NULL;
+
+//For resetting all threads in the MLFQ (once the timer reaches 20)
 int resetMLFQTimer = 0;
 
 /* create a new thread */
@@ -64,15 +71,24 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	newContext.uc_stack.ss_size = STACK_SIZE;
 	newContext.uc_stack.ss_flags = 0;
 
-	makecontext(&newContext, (void *)&function, 0);
+	makecontext(&newContext, (void *)&function, 1, arg);
 
 	newThread -> threadContext = newContext;
 
-	//enqueue(newThread);
+	#ifndef MLFQ
+		enqueueSTCF(newThread);
+	#else 
+		enqueueMLFQ(newThread);
+	#endif
 
-	if (!timerSet) {
-		timerSet = 1;
-		setTimer();
+	if (!didInitialize) {
+		didInitialize = 1;
+		initialize();
+	}
+
+	if (!timerOn) {
+		timerOn = 1;
+		schedule();
 	}
 
     return 0;
@@ -85,6 +101,8 @@ int rpthread_yield() {
 	// switch from thread context to scheduler context
 
 	// YOUR CODE HERE
+
+	setitimer(ITIMER_PROF, &timerOff, NULL);
 
 	swapcontext(&(currentThread -> threadContext), &schedulerContext);
 
@@ -157,7 +175,9 @@ int rpthread_mutex_init(rpthread_mutex_t *mutex,
 
 	// YOUR CODE HERE
 
-
+	mutex = malloc(sizeof(rpthread_mutex_t*));
+	mutex -> isLocked = 0;
+	mutex -> threadID = NULL;
 
 	return 0;
 };
@@ -171,7 +191,37 @@ int rpthread_mutex_lock(rpthread_mutex_t *mutex) {
 
 	// YOUR CODE HERE
 
+	if (mutex -> isLocked == 1) {
+		setitimer(ITIMER_PROF, &timerOff, NULL);
 
+		blockedList* blockedThread = malloc(sizeof(blockedList*));
+		blockedThread -> threadControlBlock = currentThread;
+		blockedThread -> tid = mutex -> threadID;
+
+		currentThread -> threadStatus = 2;
+
+		blockedList* current = blockedThreads;
+		if (current == NULL) {
+			blockedThread -> next = NULL;
+
+			current = blockedThread;
+		} else {
+			blockedList* previous = NULL;
+
+			while (current != NULL) {
+				previous = current;
+				current = current -> next;
+			}
+
+			previous -> next = blockedThread;
+			blockedThread -> next = NULL;
+		}
+
+		return -1;
+	}
+
+	mutex -> isLocked = 1;
+	mutex -> threadID = currentThread -> tid;
 
 	return 0;
 };
@@ -184,9 +234,40 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 
 	// YOUR CODE HERE
 
+	if (mutex -> isLocked == 1 && mutex -> threadID == currentThread -> tid) {
+		mutex -> isLocked = 0;
+		mutex -> threadID = NULL;
 
+		blockedList* current = blockedThreads;
+		blockedList* previous = NULL;
+		while (current != NULL) {
+			if (current -> tid == currentThread -> tid) {
+				current -> threadControlBlock -> threadStatus = 0;
+				#ifndef MLFQ
+					enqueueSTCF(current -> threadControlBlock);
+				#else 
+					enqueueMLFQ(current -> threadControlBlock);
+				#endif
 
-	return 0;
+				if (previous == NULL) {
+					current = current -> next;
+				} else {
+					previous -> next = current -> next;
+					blockedList* remove = current;
+					current = current -> next;
+
+					free(remove);
+				}
+			} else {
+				previous = current;
+				current = current -> next;
+			}
+		}
+
+		return 0;
+	}
+
+	return -1;
 };
 
 
@@ -196,7 +277,7 @@ int rpthread_mutex_destroy(rpthread_mutex_t *mutex) {
 
 	// YOUR CODE HERE
 
-
+	free(mutex);
 
 	return 0;
 };
@@ -225,7 +306,6 @@ static void schedule() {
 		// Choose MLFQ
 		sched_mlfq();
 	#endif
-
 }
 
 /* Preemptive SJF (STCF) scheduling algorithm */
@@ -235,21 +315,26 @@ static void sched_stcf() {
 
 	// YOUR CODE HERE
 
-	if (currentThread != NULL) {
-		currentThread -> threadStatus = 0;
-		currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
+	while(1) {
+		if (currentThread != NULL) {
+			currentThread -> threadStatus = 0;
+			currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
 
-		enQueueSTCF(currentThread);
-	}
+			enQueueSTCF(currentThread);
+		}
 
-	currentThread = dequeueSTCF();
-	if (currentThread != NULL) {
-		currentThread -> threadStatus = 1;
+		currentThread = dequeueSTCF();
+		if (currentThread != NULL) {
+			currentThread -> threadStatus = 1;
 
-		setitimer(ITIMER_PROF, &timer, NULL);
-		swapcontext(&schedulerContext, &(currentThread -> threadContext));
-	} else {
-		timerSet = 0;
+			setitimer(ITIMER_PROF, &timer, NULL);
+			swapcontext(&schedulerContext, &(currentThread -> threadContext));
+		} else {
+			setitimer(ITIMER_PROF, &timerOff, NULL);
+			timerOn = 0;
+
+			break;
+		}
 	}
 }
 
@@ -260,22 +345,33 @@ static void sched_mlfq() {
 
 	// YOUR CODE HERE
 
-	if (currentThread != NULL) {
-		currentThread -> threadStatus = 0;
-		if (currentThread -> timeElapsed != 7)
-			currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
+	while (1) {
+		if (currentThread != NULL) {
+			currentThread -> threadStatus = 0;
+			if (currentThread -> timeElapsed != 7)
+				currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
 
-		enqueueMLFQ(currentThread);
-	}
+			enqueueMLFQ(currentThread);
 
-	currentThread = dequeueMLFQ();
-	if (currentThread != NULL) {
-		currentThread -> threadStatus = 1;
+			resetMLFQTimer++;
+			if (resetMLFQTimer == 20) {
+				resetMLFQTimer = 0;
+				resetMLFQ();
+			}
+		}
 
-		setitimer(ITIMER_PROF, &timer, NULL);
-		swapcontext(&schedulerContext, &(currentThread -> threadContext));
-	} else {
-		timerSet = 0;
+		currentThread = dequeueMLFQ();
+		if (currentThread != NULL) {
+			currentThread -> threadStatus = 1;
+
+			setitimer(ITIMER_PROF, &timer, NULL);
+			swapcontext(&schedulerContext, &(currentThread -> threadContext));
+		} else {
+			setitimer(ITIMER_PROF, &timerOff, NULL);
+			timerOn = 0;
+
+			break;
+		}
 	}
 }
 
@@ -283,7 +379,7 @@ static void sched_mlfq() {
 
 // YOUR CODE HERE
 
-void setTimer() {
+void initialize() {
 	struct sigaction signal;
 	memset (&signal, 0, sizeof (signal));
 	signal.sa_handler = &schedule;
@@ -294,7 +390,10 @@ void setTimer() {
 	timer.it_value.tv_usec = 0;
 	timer.it_value.tv_sec = 1;
 
-	schedule();
+	timerOff.it_interval.tv_usec = 0; 
+	timerOff.it_interval.tv_sec = 0;
+	timerOff.it_value.tv_usec = 0;
+	timerOff.it_value.tv_sec = 0;
 }
 
 void enqueueSTCF(tcb* threadControlBlock) {
