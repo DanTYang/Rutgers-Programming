@@ -23,13 +23,13 @@ runQueue* headSTCF;
 runQueue headMLFQ[8];
 
 //The current thread that is running
-tcb* currentThread;
+tcb* currentThread = NULL;
 
 //For finished threads, used to store return value when joins
-threadReturn* finishedList;
+threadReturn* finishedList = NULL;
 
 //For resetting all threads in the MLFQ (once the timer reaches 10)
-int resetMLFQ = 0;
+int resetMLFQTimer = 0;
 
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
@@ -259,6 +259,24 @@ static void sched_mlfq() {
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
+
+	if (currentThread != NULL) {
+		currentThread -> threadStatus = 0;
+		if (currentThread -> timeElapsed != 7)
+			currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
+
+		enqueueMLFQ(currentThread);
+	}
+
+	currentThread = dequeueMLFQ();
+	if (currentThread != NULL) {
+		currentThread -> threadStatus = 1;
+
+		setitimer(ITIMER_PROF, &timer, NULL);
+		swapcontext(&schedulerContext, &(currentThread -> threadContext));
+	} else {
+		timerSet = 0;
+	}
 }
 
 // Feel free to add any other functions you need
@@ -325,5 +343,68 @@ tcb* dequeueSTCF() {
 	headSTCF = headSTCF -> next;
 
 	return runningThread;
+}
+
+void enqueueMLFQ(tcb* threadControlBlock) {
+	runQueue* newRunQueue = malloc(sizeof(runQueue*));
+	newRunQueue -> threadControlBlock = threadControlBlock;
+
+	int position = newRunQueue -> threadControlBlock -> timeElapsed;
+	runQueue* current = &headMLFQ[position];
+
+	if (current == NULL) {
+		newRunQueue -> next = NULL;
+
+		current = newRunQueue;
+	} else {
+		runQueue* previous = NULL;
+
+		while (current != NULL) {
+			previous = current;
+			current = current -> next;
+		}
+
+		previous -> next = newRunQueue;
+		newRunQueue -> next = NULL;
+	}
+}
+
+tcb* dequeueMLFQ() {
+	int i;
+	for (i = 0; i < 8; i++) {
+		runQueue* current = &headMLFQ[i];
+
+		if (current != NULL) {
+			tcb* runningThread = current -> threadControlBlock;
+			current = current -> next;
+
+			return runningThread;
+		}
+	}
+
+	return NULL;
+}
+
+void resetMLFQ() {
+	runQueue* top = &headMLFQ[0];
+	if (top != NULL) {
+		while (top -> next != NULL)
+			top = top -> next;
+	}
+
+	int i;
+	for (i = 1; i < 8; i++) {
+		runQueue* current = &headMLFQ[i];
+
+		while (current != NULL) {
+			top -> next = current;
+
+			top = top -> next;
+			current = current -> next;
+		}
+
+		current = &headMLFQ[i];
+		current = NULL;
+	}
 }
 
