@@ -9,6 +9,8 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 
+int isFirstTime = 1;
+
 //For the tid in pthread_create
 int tidCounter = 0;
 
@@ -23,7 +25,7 @@ struct itimerval timerOff;
 int isTimerOn = 0;
 
 //Context for the scheduler
-ucontext_t schedulerContext;
+ucontext_t schedulerContext, mainContext;
 
 //Runqueues for STCF and MLFQ
 runQueue* headSTCF;
@@ -65,13 +67,33 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 
     // YOUR CODE HERE
 
+	/*
 	if (isTimerOn) {
 		isTimerOn = 0;
 		setitimer(ITIMER_PROF, &timerOff, NULL);
 	}
+	*/
+
+	if (isFirstTime) {
+		isFirstTime = 0;
+		tcb* mainThread = malloc(sizeof(tcb*));
+		mainThread -> tid = tidCounter++;
+		mainThread -> threadStatus = 0; 
+		mainThread -> timeElapsed = 1000000000;
+
+		getcontext(&mainContext);
+
+		mainThread -> threadContext = mainContext;
+
+		#ifndef MLFQ
+			enqueueSTCF(mainThread);
+		#else 
+			enqueueMLFQ(mainThread);
+		#endif
+	}
 
 	tcb* newThread = malloc(sizeof(tcb*));
-	newThread -> tid = ++tidCounter;
+	newThread -> tid = tidCounter++;
 	*thread = newThread -> tid; 
 	newThread -> threadStatus = 0; 
 	newThread -> timeElapsed = 0;
@@ -111,10 +133,12 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 		initialize();
 	}
 
+	/*
 	if (!isTimerOn) {
-		isTimerOn = 1;
+		isTimerOn = 1; 
 		schedule();
 	}
+	*/
 
     return 0;
 };
@@ -140,7 +164,7 @@ void rpthread_exit(void *value_ptr) {
 
 	// YOUR CODE HERE
 
-	setitimer(ITIMER_PROF, &timerOff, NULL);
+	//setitimer(ITIMER_PROF, &timerOff, NULL);
 
 	if (value_ptr != NULL) {
 		finishedList* finishedThread = malloc(sizeof(finishedList*));
@@ -160,7 +184,7 @@ void rpthread_exit(void *value_ptr) {
 
 	currentThread = NULL;
 
-	schedule();
+	setcontext(&schedulerContext);
 };
 
 
@@ -349,10 +373,10 @@ static void sched_stcf() {
 			currentThread -> threadStatus = 1;
 
 			setitimer(ITIMER_PROF, &timer, NULL);
-
+			printf("Current Thread ID: %d\n", currentThread -> tid);
 			swapcontext(&schedulerContext, &(currentThread -> threadContext));
 		} else {
-			setitimer(ITIMER_PROF, &timerOff, NULL);
+			//setitimer(ITIMER_PROF, &timerOff, NULL);
 			isTimerOn = 0;
 		}
 	}
@@ -385,9 +409,10 @@ static void sched_mlfq() {
 			currentThread -> threadStatus = 1;
 
 			setitimer(ITIMER_PROF, &timer, NULL);
+
 			swapcontext(&schedulerContext, &(currentThread -> threadContext));
 		} else {
-			setitimer(ITIMER_PROF, &timerOff, NULL);
+			//setitimer(ITIMER_PROF, &timerOff, NULL);
 			isTimerOn = 0;
 		}
 	}
@@ -412,6 +437,8 @@ void initialize() {
 	timerOff.it_interval.tv_sec = 0;
 	timerOff.it_value.tv_usec = 0;
 	timerOff.it_value.tv_sec = 0;
+
+	schedule();
 }
 
 void enqueueSTCF(tcb* threadControlBlock) {
