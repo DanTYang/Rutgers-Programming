@@ -9,6 +9,9 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 
+//For the tid in pthread_create
+int tidCounter = 0;
+
 //Used to initialize the sigaction and timer
 int didInitialize = 0;
 
@@ -40,12 +43,18 @@ int resetMLFQTimer = 0;
 
 static void schedule();
 static void sched_stcf();
+static void sched_mlfq();
 void initialize();
 void enqueueSTCF(tcb* threadControlBlock);
 tcb* dequeueSTCF();
 void enqueueMLFQ(tcb* threadControlBlock);
 tcb* dequeueMLFQ();
 void resetMLFQ();
+
+
+void thread_runner(void *(*function)(void*), void *arg) {
+    function(arg);
+}
 
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
@@ -55,9 +64,15 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
     // after everything is all set, push this thread int
 
     // YOUR CODE HERE
-	
+
+	if (isTimerOn) {
+		isTimerOn = 0;
+		setitimer(ITIMER_PROF, &timerOff, NULL);
+	}
+
 	tcb* newThread = malloc(sizeof(tcb*));
-	newThread -> tid = *thread;
+	newThread -> tid = ++tidCounter;
+	*thread = newThread -> tid; 
 	newThread -> threadStatus = 0; 
 	newThread -> timeElapsed = 0;
 
@@ -80,7 +95,8 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	newContext.uc_stack.ss_size = STACK_SIZE;
 	newContext.uc_stack.ss_flags = 0;
 
-	makecontext(&newContext, (void *)&function, 1, arg);
+	//makecontext(&newContext, (void*)&function, 0);
+	makecontext(&newContext, (void*)&thread_runner, 2, function, arg);
 
 	newThread -> threadContext = newContext;
 
@@ -140,7 +156,7 @@ void rpthread_exit(void *value_ptr) {
 		finishedThreads = finishedThread;
 	}
 
-	free(currentThread);
+	//free(currentThread);
 
 	currentThread = NULL;
 
@@ -167,7 +183,7 @@ int rpthread_join(rpthread_t thread, void **value_ptr) {
 			else 
 				previous -> next = current -> next;
 
-			free(current);
+			//free(current);
 
 			return 0;
 		}
@@ -261,7 +277,7 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 					blockedList* remove = current;
 					current = current -> next;
 
-					free(remove);
+					//free(remove);
 				}
 			} else {
 				previous = current;
@@ -325,7 +341,7 @@ static void sched_stcf() {
 			currentThread -> threadStatus = 0;
 			currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
 
-			enQueueSTCF(currentThread);
+			enqueueSTCF(currentThread);
 		}
 
 		currentThread = dequeueSTCF();
@@ -333,12 +349,11 @@ static void sched_stcf() {
 			currentThread -> threadStatus = 1;
 
 			setitimer(ITIMER_PROF, &timer, NULL);
+
 			swapcontext(&schedulerContext, &(currentThread -> threadContext));
 		} else {
 			setitimer(ITIMER_PROF, &timerOff, NULL);
 			isTimerOn = 0;
-
-			break;
 		}
 	}
 }
@@ -374,8 +389,6 @@ static void sched_mlfq() {
 		} else {
 			setitimer(ITIMER_PROF, &timerOff, NULL);
 			isTimerOn = 0;
-
-			break;
 		}
 	}
 }
@@ -408,7 +421,7 @@ void enqueueSTCF(tcb* threadControlBlock) {
 
 	if (headSTCF == NULL) {
 		newRunQueue -> next = NULL;
-
+		
 		headSTCF = newRunQueue;
 	} else {
 		runQueue* previous = NULL;

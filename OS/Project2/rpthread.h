@@ -10,7 +10,7 @@
 #define _GNU_SOURCE
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_RTHREAD macro */
-//#define USE_RTHREAD 1
+#define USE_RTHREAD 1
 
 /* include lib header files that you need here: */
 #include <unistd.h>
