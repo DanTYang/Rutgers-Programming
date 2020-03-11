@@ -38,6 +38,15 @@ blockedList* blockedThreads = NULL;
 //For resetting all threads in the MLFQ (once the timer reaches 20)
 int resetMLFQTimer = 0;
 
+static void schedule();
+static void sched_stcf();
+void initialize();
+void enqueueSTCF(tcb* threadControlBlock);
+tcb* dequeueSTCF();
+void enqueueMLFQ(tcb* threadControlBlock);
+tcb* dequeueMLFQ();
+void resetMLFQ();
+
 /* create a new thread */
 int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
 	// Create Thread Control Block
@@ -48,7 +57,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
     // YOUR CODE HERE
 	
 	tcb* newThread = malloc(sizeof(tcb*));
-	newThread -> tid = &thread;
+	newThread -> tid = *thread;
 	newThread -> threadStatus = 0; 
 	newThread -> timeElapsed = 0;
 
@@ -179,7 +188,7 @@ int rpthread_mutex_init(rpthread_mutex_t *mutex,
 
 	mutex = malloc(sizeof(rpthread_mutex_t*));
 	mutex -> isLocked = 0;
-	mutex -> tid = NULL;
+	mutex -> tid = 0;
 
 	return 0;
 };
@@ -231,7 +240,7 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 
 	if (mutex -> isLocked == 1 && mutex -> tid == currentThread -> tid) {
 		mutex -> isLocked = 0;
-		mutex -> tid = NULL;
+		mutex -> tid = 0;
 
 		blockedList* current = blockedThreads;
 		blockedList* previous = NULL;
@@ -377,7 +386,7 @@ static void sched_mlfq() {
 
 void initialize() {
 	struct sigaction signal;
-	memset (&signal, 0, sizeof (signal));
+	memset(&signal, 0, sizeof(signal));
 	signal.sa_handler = &schedule;
 	sigaction (SIGPROF, &signal, NULL);
 
