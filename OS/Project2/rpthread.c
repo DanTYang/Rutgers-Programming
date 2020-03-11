@@ -17,7 +17,7 @@ struct itimerval timer;
 struct itimerval timerOff;
 
 //If the timer is on or not
-int timerOn = 0;
+int isTimerOn = 0;
 
 //Context for the scheduler
 ucontext_t schedulerContext;
@@ -30,7 +30,7 @@ runQueue headMLFQ[8];
 tcb* currentThread = NULL;
 
 //For finished threads, used to store return value when joins
-threadReturn* finishedList = NULL;
+finishedList* finishedThreads = NULL;
 
 //Used to store blocked threads
 blockedList* blockedThreads = NULL;
@@ -86,8 +86,8 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 		initialize();
 	}
 
-	if (!timerOn) {
-		timerOn = 1;
+	if (!isTimerOn) {
+		isTimerOn = 1;
 		schedule();
 	}
 
@@ -115,18 +115,20 @@ void rpthread_exit(void *value_ptr) {
 
 	// YOUR CODE HERE
 
+	setitimer(ITIMER_PROF, &timerOff, NULL);
+
 	if (value_ptr != NULL) {
-		threadReturn* newFinishedThread = malloc(sizeof(threadReturn*));
+		finishedList* finishedThread = malloc(sizeof(finishedList*));
 
-		newFinishedThread -> tid = currentThread -> tid;
-		newFinishedThread -> value = value_ptr;
+		finishedThread -> tid = currentThread -> tid;
+		finishedThread -> value = value_ptr;
 
-		if (finishedList == NULL)
-			newFinishedThread -> next = NULL;
+		if (finishedThreads == NULL)
+			finishedThread -> next = NULL;
 		else
-			newFinishedThread -> next = finishedList;
+			finishedThread -> next = finishedThreads;
 
-		finishedList = newFinishedThread;
+		finishedThreads = finishedThread;
 	}
 
 	free(currentThread);
@@ -144,15 +146,15 @@ int rpthread_join(rpthread_t thread, void **value_ptr) {
   
 	// YOUR CODE HERE
 
-	threadReturn* previous = NULL;
-	threadReturn* current = finishedList;
+	finishedList* previous = NULL;
+	finishedList* current = finishedThreads;
 
 	while (current != NULL) {
 		if (current -> tid == thread) {
 			value_ptr = &(current -> value);
 
 			if (previous == NULL)
-				finishedList = NULL;
+				finishedThreads = current -> next;
 			else 
 				previous -> next = current -> next;
 
@@ -177,7 +179,7 @@ int rpthread_mutex_init(rpthread_mutex_t *mutex,
 
 	mutex = malloc(sizeof(rpthread_mutex_t*));
 	mutex -> isLocked = 0;
-	mutex -> threadID = NULL;
+	mutex -> tid = NULL;
 
 	return 0;
 };
@@ -196,32 +198,25 @@ int rpthread_mutex_lock(rpthread_mutex_t *mutex) {
 
 		blockedList* blockedThread = malloc(sizeof(blockedList*));
 		blockedThread -> threadControlBlock = currentThread;
-		blockedThread -> tid = mutex -> threadID;
+		blockedThread -> threadControlBlock -> threadStatus = 2;
+		blockedThread -> tid = mutex -> tid;
 
-		currentThread -> threadStatus = 2;
+		currentThread = NULL;
 
-		blockedList* current = blockedThreads;
-		if (current == NULL) {
+		if (blockedThreads == NULL)
 			blockedThread -> next = NULL;
+		else
+			blockedThread -> next = blockedThreads;
 
-			current = blockedThread;
-		} else {
-			blockedList* previous = NULL;
+		blockedThreads = blockedThread;
 
-			while (current != NULL) {
-				previous = current;
-				current = current -> next;
-			}
-
-			previous -> next = blockedThread;
-			blockedThread -> next = NULL;
-		}
+		swapcontext(&(blockedThread -> threadControlBlock -> threadContext), &schedulerContext);
 
 		return -1;
 	}
 
 	mutex -> isLocked = 1;
-	mutex -> threadID = currentThread -> tid;
+	mutex -> tid = currentThread -> tid;
 
 	return 0;
 };
@@ -234,15 +229,16 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 
 	// YOUR CODE HERE
 
-	if (mutex -> isLocked == 1 && mutex -> threadID == currentThread -> tid) {
+	if (mutex -> isLocked == 1 && mutex -> tid == currentThread -> tid) {
 		mutex -> isLocked = 0;
-		mutex -> threadID = NULL;
+		mutex -> tid = NULL;
 
 		blockedList* current = blockedThreads;
 		blockedList* previous = NULL;
 		while (current != NULL) {
 			if (current -> tid == currentThread -> tid) {
 				current -> threadControlBlock -> threadStatus = 0;
+
 				#ifndef MLFQ
 					enqueueSTCF(current -> threadControlBlock);
 				#else 
@@ -331,7 +327,7 @@ static void sched_stcf() {
 			swapcontext(&schedulerContext, &(currentThread -> threadContext));
 		} else {
 			setitimer(ITIMER_PROF, &timerOff, NULL);
-			timerOn = 0;
+			isTimerOn = 0;
 
 			break;
 		}
@@ -368,7 +364,7 @@ static void sched_mlfq() {
 			swapcontext(&schedulerContext, &(currentThread -> threadContext));
 		} else {
 			setitimer(ITIMER_PROF, &timerOff, NULL);
-			timerOn = 0;
+			isTimerOn = 0;
 
 			break;
 		}

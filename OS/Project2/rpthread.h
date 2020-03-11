@@ -57,7 +57,7 @@ typedef struct rpthread_mutex_t {
 	// YOUR CODE HERE
 
 	int isLocked;
-	rpthread_t threadID;
+	rpthread_t tid;
 } rpthread_mutex_t;
 
 /* define your data structures here: */
@@ -70,11 +70,11 @@ typedef struct _runQueue {
 	struct _runQueue* next;
 } runQueue;
 
-typedef struct _threadReturn {
+typedef struct _finishedList {
 	rpthread_t tid;
 	void* value;
-	struct _threadReturn* next;
-} threadReturn;
+	struct _finishedList* next;
+} finishedList;
 
 typedef struct _blockedList {
 	//The tid of the thread that locked the mutex
