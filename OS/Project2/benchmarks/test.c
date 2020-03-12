@@ -33,7 +33,7 @@ void *inc_shared_counter(void *arg) {
         //pthread_mutex_lock(&mutex);
 
         x = x + 1;
-        printf("%d\n", x);
+
         //spthread_mutex_unlock(&mutex);
 
     }
@@ -63,7 +63,9 @@ int main(int argc, char *argv[]) {
     // run the inc_shared_counter function()
     /* Implement Code Here */
     pthread_create(&t1, NULL, inc_shared_counter, NULL);
+    printf("done with thread1\n");
     pthread_create(&t2, NULL, inc_shared_counter, NULL);
+    printf("done with thread2\n");
 
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);

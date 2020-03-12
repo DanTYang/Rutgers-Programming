@@ -9,13 +9,11 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 
+//Used to create the main context
 int isFirstTime = 1;
 
 //For the tid in pthread_create
 int tidCounter = 0;
-
-//Used to initialize the sigaction and timer
-int didInitialize = 0;
 
 //Timer variable
 struct itimerval timer;
@@ -53,8 +51,7 @@ void enqueueMLFQ(tcb* threadControlBlock);
 tcb* dequeueMLFQ();
 void resetMLFQ();
 
-
-void thread_runner(void *(*function)(void*), void *arg) {
+void threadRunner(void *(*function)(void*), void *arg) {
     function(arg);
 }
 
@@ -75,11 +72,10 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	*/
 
 	if (isFirstTime) {
-		isFirstTime = 0;
 		tcb* mainThread = malloc(sizeof(tcb*));
 		mainThread -> tid = tidCounter++;
 		mainThread -> threadStatus = 0; 
-		mainThread -> timeElapsed = 1000000000;
+		mainThread -> timeElapsed = 30;
 
 		getcontext(&mainContext);
 
@@ -91,6 +87,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 			enqueueMLFQ(mainThread);
 		#endif
 	}
+
 
 	tcb* newThread = malloc(sizeof(tcb*));
 	newThread -> tid = tidCounter++;
@@ -118,19 +115,35 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 	newContext.uc_stack.ss_flags = 0;
 
 	//makecontext(&newContext, (void*)&function, 0);
-	makecontext(&newContext, (void*)&thread_runner, 2, function, arg);
+	makecontext(&newContext, (void*)&threadRunner, 2, function, arg);
 
 	newThread -> threadContext = newContext;
-
+	printf("creating\n");
 	#ifndef MLFQ
 		enqueueSTCF(newThread);
 	#else 
 		enqueueMLFQ(newThread);
 	#endif
 
-	if (!didInitialize) {
-		didInitialize = 1;
-		initialize();
+	if (isFirstTime) {
+		isFirstTime = 0;
+
+		struct sigaction signal;
+		memset(&signal, 0, sizeof(signal));
+		signal.sa_handler = &schedule;
+		sigaction (SIGPROF, &signal, NULL);
+
+		timer.it_interval.tv_usec = 0; 
+		timer.it_interval.tv_sec = 0;
+		timer.it_value.tv_usec = 0;
+		timer.it_value.tv_sec = 1;
+
+		timerOff.it_interval.tv_usec = 0; 
+		timerOff.it_interval.tv_sec = 0;
+		timerOff.it_value.tv_usec = 0;
+		timerOff.it_value.tv_sec = 0;
+
+		schedule();
 	}
 
 	/*
@@ -322,7 +335,7 @@ int rpthread_mutex_destroy(rpthread_mutex_t *mutex) {
 
 	// YOUR CODE HERE
 
-	free(mutex);
+	//free(mutex);
 
 	return 0;
 };
@@ -342,7 +355,7 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
-
+	printf("schedule called\n");
 	// schedule policy
 	#ifndef MLFQ
 		// Choose STCF
@@ -422,26 +435,8 @@ static void sched_mlfq() {
 
 // YOUR CODE HERE
 
-void initialize() {
-	struct sigaction signal;
-	memset(&signal, 0, sizeof(signal));
-	signal.sa_handler = &schedule;
-	sigaction (SIGPROF, &signal, NULL);
-
-	timer.it_interval.tv_usec = 0; 
-	timer.it_interval.tv_sec = 0;
-	timer.it_value.tv_usec = 0;
-	timer.it_value.tv_sec = 1;
-
-	timerOff.it_interval.tv_usec = 0; 
-	timerOff.it_interval.tv_sec = 0;
-	timerOff.it_value.tv_usec = 0;
-	timerOff.it_value.tv_sec = 0;
-
-	schedule();
-}
-
 void enqueueSTCF(tcb* threadControlBlock) {
+	printf("enqueuing\n");
 	runQueue* newRunQueue = malloc(sizeof(runQueue*));
 
 	newRunQueue -> threadControlBlock = threadControlBlock;
