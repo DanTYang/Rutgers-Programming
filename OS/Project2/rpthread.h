@@ -58,6 +58,7 @@ typedef struct rpthread_mutex_t {
 	// YOUR CODE HERE
 
 	int isLocked;
+	
 	rpthread_t tid;
 } rpthread_mutex_t;
 

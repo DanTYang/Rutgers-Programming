@@ -294,7 +294,7 @@ int rpthread_mutex_unlock(rpthread_mutex_t *mutex) {
 
 	if (mutex -> isLocked == 1 && mutex -> tid == currentThread -> tid) {
 		mutex -> isLocked = 0;
-		mutex -> tid = 0;
+		mutex -> tid = -1;
 
 		blockedList* current = blockedThreads;
 		blockedList* previous = NULL;
@@ -517,7 +517,9 @@ void enqueueMLFQ(tcb* threadControlBlock) {
 	int position = newRunQueue -> threadControlBlock -> timeElapsed;
 
 	if (headMLFQ[position] == NULL) {
+
 		//printf("Thread %d queued at position %d\n", threadControlBlock -> tid, position);
+		
 		headMLFQ[position] = newRunQueue;
 	} else {
 		runQueue* current = headMLFQ[position];
@@ -527,7 +529,9 @@ void enqueueMLFQ(tcb* threadControlBlock) {
 			previous = current;
 			current = current -> next;
 		}
+
 		//printf("Thread %d queued at position %d\n", threadControlBlock -> tid, position);
+
 		previous -> next = newRunQueue;
 	}
 }
@@ -537,7 +541,9 @@ tcb* dequeueMLFQ() {
 	for (i = 0; i < 8; i++) {
 		if (headMLFQ[i] != NULL) {
 			tcb* runningThread = headMLFQ[i] -> threadControlBlock;
+
 			//printf("Thread %d dequeued at position %d\n", runningThread -> tid, runningThread -> timeElapsed);
+
 			headMLFQ[i] = headMLFQ[i] -> next;
 
 			return runningThread;
