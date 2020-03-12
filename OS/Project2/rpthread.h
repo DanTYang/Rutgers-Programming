@@ -80,6 +80,7 @@ typedef struct _finishedList {
 typedef struct _blockedList {
 	//The tid of the thread that locked the mutex
 	rpthread_t tid;
+	//void** value;
 	tcb* threadControlBlock;
 	struct _blockedList* next;
 } blockedList;
