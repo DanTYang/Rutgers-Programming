@@ -31,10 +31,10 @@ void *inc_shared_counter(void *arg) {
                    between the two threads */
 
         //pthread_mutex_lock(&mutex);
-        printf("%d\n", x);
+
         x = x + 1;
 
-        //spthread_mutex_unlock(&mutex);
+        //pthread_mutex_unlock(&mutex);
 
     }
 
@@ -57,6 +57,8 @@ int main(int argc, char *argv[]) {
 
     loop = atoi(argv[1]) / 2;
 
+    pthread_mutex_init(&mutex, NULL);
+
     printf("Going to run two threads to increment x up to %d\n", loop * 2);
 
     // Part 1: create two threads and have them
@@ -71,6 +73,8 @@ int main(int argc, char *argv[]) {
     printf("thread1 join\n");
     pthread_join(t2, NULL);
     printf("thread2 join\n");
+
+    //pthread_mutex_destroy(&mutex);
 
     printf("The final value of x is %d\n", x);
 

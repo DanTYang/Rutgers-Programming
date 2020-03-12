@@ -9,6 +9,9 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 
+//Used to indicate if current thread is finished running
+int isFinished = 0;
+
 //Used to create the main context
 int isFirstTime = 1;
 
@@ -25,7 +28,7 @@ tcb* mainThread = NULL;
 
 //Runqueues for STCF and MLFQ
 runQueue* headSTCF;
-runQueue headMLFQ[8];
+runQueue* headMLFQ[8];
 
 //The current thread that is running
 tcb* currentThread = NULL;
@@ -62,10 +65,10 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 
 	if (isFirstTime) {
 		//Creates main thread and main context
-		mainThread = malloc(sizeof(tcb*));
+		mainThread = malloc(sizeof(tcb));
 		mainThread -> tid = tidCounter++;
 		mainThread -> threadStatus = 0; 
-		mainThread -> timeElapsed = 1;
+		mainThread -> timeElapsed = 0;
 
 		getcontext(&mainContext);
 
@@ -73,8 +76,10 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 
 		#ifndef MLFQ
 			enqueueSTCF(mainThread);
+			dequeueSTCF(mainThread);
 		#else 
 			enqueueMLFQ(mainThread);
+			dequeueMLFQ(mainThread);
 		#endif
 
 		//Creates scheduler context
@@ -90,7 +95,7 @@ int rpthread_create(rpthread_t * thread, pthread_attr_t * attr, void *(*function
 		makecontext(&schedulerContext, (void*)&schedule, 0);
 	}
 
-	tcb* newThread = malloc(sizeof(tcb*));
+	tcb* newThread = malloc(sizeof(tcb));
 	newThread -> tid = tidCounter++;
 	*thread = newThread -> tid; 
 	newThread -> threadStatus = 0; 
@@ -174,7 +179,7 @@ void rpthread_exit(void *value_ptr) {
 
 	setitimer(ITIMER_PROF, &timerOff, NULL);
 
-	finishedList* finishedThread = malloc(sizeof(finishedList*));
+	finishedList* finishedThread = malloc(sizeof(finishedList));
 
 	finishedThread -> tid = currentThread -> tid;
 	finishedThread -> value = value_ptr;
@@ -186,9 +191,7 @@ void rpthread_exit(void *value_ptr) {
 
 	finishedThreads = finishedThread;
 
-	//free(currentThread);
-
-	currentThread = NULL;
+	isFinished = 1;
 
 	setcontext(&schedulerContext);
 };
@@ -217,7 +220,7 @@ int rpthread_join(rpthread_t thread, void **value_ptr) {
 				else 
 					previous -> next = current -> next;
 
-				//free(current);
+				free(current);
 
 				return 0;
 			}
@@ -239,9 +242,9 @@ int rpthread_mutex_init(rpthread_mutex_t *mutex,
 
 	// YOUR CODE HERE
 
-	mutex = malloc(sizeof(rpthread_mutex_t*));
+	mutex = malloc(sizeof(rpthread_mutex_t));
 	mutex -> isLocked = 0;
-	mutex -> tid = 0;
+	mutex -> tid = -1;
 
 	return 0;
 };
@@ -258,7 +261,7 @@ int rpthread_mutex_lock(rpthread_mutex_t *mutex) {
 	if (mutex -> isLocked == 1) {
 		setitimer(ITIMER_PROF, &timerOff, NULL);
 
-		blockedList* blockedThread = malloc(sizeof(blockedList*));
+		blockedList* blockedThread = malloc(sizeof(blockedList));
 		blockedThread -> threadControlBlock = currentThread;
 		blockedThread -> threadControlBlock -> threadStatus = 2;
 		blockedThread -> tid = mutex -> tid;
@@ -273,8 +276,6 @@ int rpthread_mutex_lock(rpthread_mutex_t *mutex) {
 		blockedThreads = blockedThread;
 
 		swapcontext(&(blockedThread -> threadControlBlock -> threadContext), &schedulerContext);
-
-		return -1;
 	}
 
 	mutex -> isLocked = 1;
@@ -356,8 +357,6 @@ static void schedule() {
 
 	// YOUR CODE HERE
 
-	printf("timer went off\n");
-
 	// schedule policy
 	#ifndef MLFQ
 		// Choose STCF
@@ -378,6 +377,14 @@ static void sched_stcf() {
 	while(1) {
 		setitimer(ITIMER_PROF, &timerOff, NULL);
 
+		if (isFinished) {
+			isFinished = 0;
+
+			free((currentThread -> threadContext).uc_stack.ss_sp);
+			free(currentThread);
+			currentThread = NULL;
+		}
+
 		if (currentThread != NULL) {
 			currentThread -> threadStatus = 0;
 			currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
@@ -391,7 +398,7 @@ static void sched_stcf() {
 
 		setitimer(ITIMER_PROF, &timer, NULL);
 
-		printf("Current Thread ID: %d\n", currentThread -> tid);
+		//printf("Current Thread ID: %d, Time Elapsed: %d\n", currentThread -> tid, currentThread -> timeElapsed);
 
 		swapcontext(&schedulerContext, &(currentThread -> threadContext));
 	}
@@ -405,18 +412,28 @@ static void sched_mlfq() {
 	// YOUR CODE HERE
 
 	while (1) {
+		setitimer(ITIMER_PROF, &timerOff, NULL);
+	
+		if (isFinished) {
+			isFinished = 0;
+
+			free((currentThread -> threadContext).uc_stack.ss_sp);
+			free(currentThread);
+			currentThread = NULL;
+		}
+
 		if (currentThread != NULL) {
 			currentThread -> threadStatus = 0;
 			if (currentThread -> timeElapsed != 7)
 				currentThread -> timeElapsed = currentThread -> timeElapsed + 1;
 
 			enqueueMLFQ(currentThread);
+		}
 
-			resetMLFQTimer++;
-			if (resetMLFQTimer == 20) {
-				resetMLFQTimer = 0;
-				resetMLFQ();
-			}
+		resetMLFQTimer++;
+		if (resetMLFQTimer == 20) {
+			resetMLFQTimer = 0;
+			resetMLFQ();
 		}
 
 		currentThread = dequeueMLFQ();
@@ -424,6 +441,8 @@ static void sched_mlfq() {
 		currentThread -> threadStatus = 1;
 
 		setitimer(ITIMER_PROF, &timer, NULL);
+
+		//printf("Current Thread ID: %d, Time Elapsed: %d\n", currentThread -> tid, currentThread -> timeElapsed);
 
 		swapcontext(&schedulerContext, &(currentThread -> threadContext));
 	}
@@ -442,7 +461,7 @@ void signalHandler(int signum) {
 }
 
 void enqueueSTCF(tcb* threadControlBlock) {
-	runQueue* newRunQueue = malloc(sizeof(runQueue*));
+	runQueue* newRunQueue = malloc(sizeof(runQueue));
 
 	newRunQueue -> threadControlBlock = threadControlBlock;
 
@@ -490,37 +509,36 @@ tcb* dequeueSTCF() {
 }
 
 void enqueueMLFQ(tcb* threadControlBlock) {
-	runQueue* newRunQueue = malloc(sizeof(runQueue*));
+	runQueue* newRunQueue = malloc(sizeof(runQueue));
+
 	newRunQueue -> threadControlBlock = threadControlBlock;
+	newRunQueue -> next = NULL;
 
 	int position = newRunQueue -> threadControlBlock -> timeElapsed;
-	runQueue* current = &headMLFQ[position];
 
-	if (current == NULL) {
-		newRunQueue -> next = NULL;
-
-		current = newRunQueue;
+	if (headMLFQ[position] == NULL) {
+		//printf("Thread %d queued at position %d\n", threadControlBlock -> tid, position);
+		headMLFQ[position] = newRunQueue;
 	} else {
+		runQueue* current = headMLFQ[position];
 		runQueue* previous = NULL;
 
 		while (current != NULL) {
 			previous = current;
 			current = current -> next;
 		}
-
+		//printf("Thread %d queued at position %d\n", threadControlBlock -> tid, position);
 		previous -> next = newRunQueue;
-		newRunQueue -> next = NULL;
 	}
 }
 
 tcb* dequeueMLFQ() {
 	int i;
 	for (i = 0; i < 8; i++) {
-		runQueue* current = &headMLFQ[i];
-
-		if (current != NULL) {
-			tcb* runningThread = current -> threadControlBlock;
-			current = current -> next;
+		if (headMLFQ[i] != NULL) {
+			tcb* runningThread = headMLFQ[i] -> threadControlBlock;
+			//printf("Thread %d dequeued at position %d\n", runningThread -> tid, runningThread -> timeElapsed);
+			headMLFQ[i] = headMLFQ[i] -> next;
 
 			return runningThread;
 		}
@@ -530,7 +548,7 @@ tcb* dequeueMLFQ() {
 }
 
 void resetMLFQ() {
-	runQueue* top = &headMLFQ[0];
+	runQueue* top = headMLFQ[0];
 	if (top != NULL) {
 		while (top -> next != NULL)
 			top = top -> next;
@@ -538,17 +556,21 @@ void resetMLFQ() {
 
 	int i;
 	for (i = 1; i < 8; i++) {
-		runQueue* current = &headMLFQ[i];
+		runQueue* current = headMLFQ[i];
 
 		while (current != NULL) {
-			top -> next = current;
+			if (top != NULL) {
+				top -> next = current;
 
-			top = top -> next;
-			current = current -> next;
+				top = top -> next;
+				current = current -> next;
+			} else {
+				top = current;
+				current = current -> next;
+			}
 		}
 
-		current = &headMLFQ[i];
-		current = NULL;
+		headMLFQ[i] = NULL;
 	}
 }
 
