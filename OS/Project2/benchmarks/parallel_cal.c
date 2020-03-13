@@ -28,9 +28,9 @@ void parallel_calculate(void* arg) {
 		}
 	}
 	for (j = n; j < R_SIZE; j += thread_num) {
-		pthread_mutex_lock(&mutex);
+		//pthread_mutex_lock(&mutex);
 		sum += pSum[j];
-		pthread_mutex_unlock(&mutex);
+		//pthread_mutex_unlock(&mutex);
 	}
 
 	pthread_exit(NULL);

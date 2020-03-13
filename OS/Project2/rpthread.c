@@ -429,7 +429,7 @@ static void sched_mlfq() {
 
 			enqueueMLFQ(currentThread);
 		}
-
+		
 		resetMLFQTimer++;
 		if (resetMLFQTimer == 20) {
 			resetMLFQTimer = 0;
@@ -554,25 +554,18 @@ tcb* dequeueMLFQ() {
 }
 
 void resetMLFQ() {
-	runQueue* top = headMLFQ[0];
-	if (top != NULL) {
-		while (top -> next != NULL)
-			top = top -> next;
-	}
-
 	int i;
 	for (i = 1; i < 8; i++) {
 		runQueue* current = headMLFQ[i];
-
-		while (current != NULL) {
-			if (top != NULL) {
-				top -> next = current;
-
-				top = top -> next;
+		if (current != NULL) {
+			while (current -> next != NULL)
 				current = current -> next;
+			
+			if (headMLFQ[0] != NULL) {
+				current -> next = headMLFQ[0];
+				headMLFQ[0] = headMLFQ[i];
 			} else {
-				top = current;
-				current = current -> next;
+				headMLFQ[0] = headMLFQ[i];
 			}
 		}
 

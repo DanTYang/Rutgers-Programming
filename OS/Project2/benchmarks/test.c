@@ -30,11 +30,11 @@ void *inc_shared_counter(void *arg) {
                    allow for synchonized incrementing of x
                    between the two threads */
 
-        //pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&mutex);
 
         x = x + 1;
 
-        //pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&mutex);
 
     }
 
