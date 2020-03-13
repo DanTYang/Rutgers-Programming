@@ -45,9 +45,9 @@ void external_calculate(void* arg) {
 			// read 16B from nth record into memory from mem[n*4]
 			for (j = 0; j < 4; ++j) {
 				fscanf(f, "%d", &mem[k*4 + j]);
-				pthread_mutex_lock(&mutex);
+				//pthread_mutex_lock(&mutex);
 				sum += mem[k*4 + j];
-				pthread_mutex_unlock(&mutex);
+				//pthread_mutex_unlock(&mutex);
 			}
 		}
 		fclose(f);
