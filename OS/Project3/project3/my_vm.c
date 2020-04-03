@@ -1,9 +1,18 @@
 #include "my_vm.h"
 
 char* physicalMemoryBitmap = NULL;
+int numPagesLeft;
+
 char* virtualMemoryBitmap = NULL;
+
 char* physicalMemory = NULL;
-tlb TLB[];
+
+pde_t* pageDirectory = NULL;
+pte_t** pageTables = NULL;
+
+int isInitialized = 0;
+
+//tlb TLB[];
 
 // Function responsible for allocating and setting your physical memory 
 void set_physical_mem() {
@@ -15,21 +24,14 @@ void set_physical_mem() {
 
     physicalMemory = malloc(MEMSIZE);
 
-    /*
-    int offsetBits = log2(PGSIZE);
-    int restBits = 32 - offsetBits;
-    int pageDirectoryBits = restBits / 2;
-    int pageTableBits = restBits - pageDirectoryBits;
-    */
-
-    int numPhysicalPages = MEMSIZE / PGSIZE;
+    int numPhysicalPages = MEMSIZE / (PGSIZE * 8);
     physicalMemoryBitmap = malloc(numPhysicalPages);
 
     int i;
     for (i = 0; i < numPhysicalPages; i++)
         *(physicalMemoryBitmap + i) = '0';
 
-    int numVirtualPages = MAX_MEMSIZE / PGSIZE;
+    int numVirtualPages = MAX_MEMSIZE / (PGSIZE * 8);
     virtualMemoryBitmap = malloc(numVirtualPages);
 
     for (i = 0; i < numVirtualPages; i++)
@@ -82,6 +84,22 @@ pte_t *translate(pde_t *pgdir, void *va) {
        Part 2 HINT: Check the TLB before performing the translation. If
        translation exists, then you can return physical address from the TLB. */
 
+    int offsetBits = log2(PGSIZE);
+    int pageDirectoryBits = (32 - offsetBits) / 2;
+    int pageTableBits = 32 - offsetBits - pageDirectoryBits;
+
+    unsigned long virtualAddress = (unsigned long) va;
+
+    unsigned long pageTableEntry = virtualAddress >> (offsetBits + pageTableBits);
+
+    unsigned long outerBitsMask = (1 << pageTableBits) - 1;
+    unsigned long physicalMemoryEntry = (virtualAddress >> offsetBits) & outerBitsMask;
+
+    pte_t* pageTableNum = *(pgdir + pageTableEntry);
+    pte_t pageTableEntry = *(pageTableNum + physicalMemoryEntry);
+
+    return pageTableEntry;
+
     //If translation not successfull
     return NULL; 
 }
@@ -96,6 +114,26 @@ int page_map(pde_t *pgdir, void *va, void *pa)
     /* HINT: Similar to translate(), find the page directory (1st level)
        and page table (2nd-level) indices. If no mapping exists, set the
        virtual to physical mapping. */
+
+    int offsetBits = log2(PGSIZE);
+    int pageDirectoryBits = (32 - offsetBits) / 2;
+    int pageTableBits = 32 - offsetBits - pageDirectoryBits;
+
+    unsigned long virtualAddress = (unsigned long) va;
+
+    unsigned long pageTableEntry = virtualAddress >> (offsetBits + pageTableBits);
+
+    unsigned long outerBitsMask = (1 << pageTableBits) - 1;
+    unsigned long physicalMemoryEntry = (virtualAddress >> offsetBits) & outerBitsMask;
+
+    pte_t* pageTableNum = *(pgdir + pageTableEntry);
+    if (pageTableNum == NULL) {
+        
+    }
+
+    pte_t pageTableEntry = *(pageTableNum + physicalMemoryEntry);
+
+    return pageTableEntry;
 
     return -1;
 }
@@ -116,6 +154,20 @@ void *a_malloc(unsigned int num_bytes) {
       page directory. Next, using get_next_avail(), check if there are free pages. If
       free pages are available, set the bitmaps and map a new page. Note, you will 
       have to mark which physical pages are used. */
+
+    if (!isInitialized) {
+        int offsetBits = log2(PGSIZE);
+        int pageDirectoryBits = (32 - offsetBits) / 2;
+        int pageTableBits = 32 - offsetBits - pageDirectoryBits;
+
+        int directoryEntries = pow(2, pageDirectoryBits);
+
+        pageDirectory = malloc(directoryEntries * PGSIZE);
+
+        set_physical_mem();
+
+        isInitialized = 1;
+    }
 
     return NULL;
 }
