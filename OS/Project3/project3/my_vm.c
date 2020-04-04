@@ -14,6 +14,14 @@ int isInitialized = 0;
 
 //tlb TLB[];
 
+int get_bit_at_index(char* bitmap, int index) {
+    char* region = bitmap + (index / 8);
+
+    char bit = (*region >> (index % 8)) & 0x1;
+
+    return (int) bit;
+}
+
 // Function responsible for allocating and setting your physical memory 
 void set_physical_mem() {
     //Allocate physical memory using mmap or malloc; this is the total size of
@@ -29,13 +37,13 @@ void set_physical_mem() {
 
     int i;
     for (i = 0; i < numPhysicalPages; i++)
-        *(physicalMemoryBitmap + i) = '0';
+        *(physicalMemoryBitmap + i) = 0;
 
     int numVirtualPages = MAX_MEMSIZE / (PGSIZE * 8);
     virtualMemoryBitmap = malloc(numVirtualPages);
 
     for (i = 0; i < numVirtualPages; i++)
-        *(virtualMemoryBitmap + i) = '0';
+        *(virtualMemoryBitmap + i) = 0;
 }
 
 
@@ -90,18 +98,24 @@ pte_t *translate(pde_t *pgdir, void *va) {
 
     unsigned long virtualAddress = (unsigned long) va;
 
-    unsigned long pageTableEntry = virtualAddress >> (offsetBits + pageTableBits);
+    unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
 
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
-    unsigned long physicalMemoryEntry = (virtualAddress >> offsetBits) & outerBitsMask;
+    unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
-    pte_t* pageTableNum = *(pgdir + pageTableEntry);
-    pte_t pageTableEntry = *(pageTableNum + physicalMemoryEntry);
+    pte_t* pageDirectoryEntry = *(pgdir + pageTableAddress);
+    if (pageDirectoryEntry == NULL) {
+        return NULL;
+    }
+
+    pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
+    if (pageTableEntry == NULL) {
+        return NULL;
+    }
 
     return pageTableEntry;
 
     //If translation not successfull
-    return NULL; 
 }
 
 
@@ -121,27 +135,48 @@ int page_map(pde_t *pgdir, void *va, void *pa)
 
     unsigned long virtualAddress = (unsigned long) va;
 
-    unsigned long pageTableEntry = virtualAddress >> (offsetBits + pageTableBits);
+    unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
 
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
-    unsigned long physicalMemoryEntry = (virtualAddress >> offsetBits) & outerBitsMask;
+    unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
-    pte_t* pageTableNum = *(pgdir + pageTableEntry);
-    if (pageTableNum == NULL) {
-        
+    if (*(pgdir + pageTableAddress) == NULL) {
+        int totalEntries = pow(2, pageTableBits);
+        *(pageTables + pageTableAddress) = malloc(totalEntries * PGSIZE);
+
+        *(pgdir + pageTableAddress) = *(pageTables + pageTableAddress);
+    }
+    pte_t* pageDirectoryEntry = *(pgdir + pageTableAddress);
+
+    pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
+    if (pageTableEntry == NULL) {
+        pageTableEntry = pa;
+
+        return 1;
     }
 
-    pte_t pageTableEntry = *(pageTableNum + physicalMemoryEntry);
-
-    return pageTableEntry;
-
-    return -1;
+    return 0;
 }
 
 
 //Function that gets the next available page.
 void *get_next_avail(int num_pages) {
     //Use virtual address bitmap to find the next free page
+    int length = 0;
+
+    int i;
+    for (i = 0; i < MAX_MEMSIZE; i++) {
+        int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
+
+        if (currentBit == 0) {
+            if (++length == num_pages)
+                return i - num_pages + 1;
+        } else {
+            length = 0;
+        }
+    }
+
+    return NULL;
 }
 
 
@@ -169,7 +204,22 @@ void *a_malloc(unsigned int num_bytes) {
         isInitialized = 1;
     }
 
-    return NULL;
+    int numPages = num_bytes / PGSIZE;
+
+    void* virtualAddress = get_next_avail(numPages);
+    if (virtualAddress == NULL) {
+        return NULL;
+    }
+
+    int i;
+    for (i = 0; i < numPages; i++) {
+        //Set virtual bitmap
+        //Find physical page
+        //Set physical bitmap
+        //use pagemap function
+    }
+
+    return virtualAddress;
 }
 
 //Responsible for releasing one or more memory pages using virtual address (va).
