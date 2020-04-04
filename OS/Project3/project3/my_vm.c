@@ -1,7 +1,7 @@
 #include "my_vm.h"
 
 char* physicalMemoryBitmap = NULL;
-int numPagesLeft;
+//int numPagesLeft;
 
 char* virtualMemoryBitmap = NULL;
 
@@ -12,7 +12,11 @@ pte_t** pageTables = NULL;
 
 int isInitialized = 0;
 
-//tlb TLB[];
+tlb* TLBhead = NULL;
+int currentTLBSize = 0;
+
+double TLBHits = 0;
+double TLBMisses = 0;
 
 int get_bit_at_index(char* bitmap, int index) {
     char* region = bitmap + (index / 8);
@@ -20,6 +24,26 @@ int get_bit_at_index(char* bitmap, int index) {
     char bit = (*region >> (index % 8)) & 0x1;
 
     return (int) bit;
+}
+
+void set_bit_at_index(char* bitmap, int index) {
+    char* region = bitmap + (index / 8);
+
+    char bit = 1 << (index % 8);
+
+    *region |= bit;
+
+    return;
+}
+
+void unset_bit_at_index(char* bitmap, int index) {
+    char* region = bitmap + (index / 8);
+
+    char bit = 1 << (index % 8);
+
+    *region &= ~bit;
+
+    return;
 }
 
 // Function responsible for allocating and setting your physical memory 
@@ -52,6 +76,28 @@ void set_physical_mem() {
 int add_TLB(void *va, void *pa)
 {
     //Part 2 HINT: Add a virtual to physical page translation to the TLB
+    tlb* newEntry = malloc(sizeof(tlb));
+    newEntry -> virtualMemoryAddress = va;
+    newEntry -> physicalMemoryAddress = pa;
+
+    if (currentTLBSize == TLB_ENTRIES) {
+        tlb* currentEntry = TLBhead;
+
+        int i;
+        for (i = 2; i < TLB_ENTRIES; i++) {
+            currentEntry = currentEntry -> next;
+        }
+
+        tlb* removedEntry = currentEntry -> next;
+        currentEntry -> next = NULL;
+
+        free(removedEntry);
+    } else {
+        currentTLBSize++;
+    }
+
+    newEntry -> next = TLBhead;
+    TLBhead = newEntry;
 
     return -1;
 }
@@ -62,7 +108,20 @@ int add_TLB(void *va, void *pa)
    Feel free to extend this function and change the return type. */
 pte_t* check_TLB(void *va) {
     //Part 2: TLB lookup code here
+    tlb* currentEntry = TLBhead;
 
+    int i;
+    for (i = 0; i < currentTLBSize; i++) {
+        if (currentEntry -> virtualMemoryAddress == (unsigned long) va) {
+            TLBHits++;
+
+            return currentEntry -> physicalMemoryAddress;
+        }
+    }
+
+    TLBMisses++;
+
+    return NULL;
 }
 
 
@@ -73,9 +132,7 @@ void print_TLB_missrate()
     double miss_rate = 0;	
 
     //Part 2 Code here to calculate and print the TLB miss rate.
-
-
-
+    miss_rate = (TLBHits + TLBMisses)  / TLBMisses;
 
     fprintf(stderr, "TLB miss rate %lf \n", miss_rate);
 }
@@ -91,6 +148,8 @@ pte_t *translate(pde_t *pgdir, void *va) {
     
        Part 2 HINT: Check the TLB before performing the translation. If
        translation exists, then you can return physical address from the TLB. */
+
+    //If translation not successfull return null
 
     int offsetBits = log2(PGSIZE);
     int pageDirectoryBits = (32 - offsetBits) / 2;
@@ -114,8 +173,6 @@ pte_t *translate(pde_t *pgdir, void *va) {
     }
 
     return pageTableEntry;
-
-    //If translation not successfull
 }
 
 
@@ -166,7 +223,7 @@ void *get_next_avail(int num_pages) {
 
     int i;
     for (i = 0; i < MAX_MEMSIZE; i++) {
-        int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
+        int currentBit = get_bit_at_index(virtualMemoryBitmap, i);
 
         if (currentBit == 0) {
             if (++length == num_pages)
@@ -179,6 +236,17 @@ void *get_next_avail(int num_pages) {
     return NULL;
 }
 
+void *get_physical_page() {
+    int i;
+    for (i = 0; i < MEMSIZE; i++) {
+        int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
+
+        if (currentBit == 0)
+            return i;
+    }
+
+    return NULL;
+}
 
 //Function responsible for allocating pages and used by the benchmark.
 void *a_malloc(unsigned int num_bytes) {
@@ -207,19 +275,27 @@ void *a_malloc(unsigned int num_bytes) {
     int numPages = num_bytes / PGSIZE;
 
     void* virtualAddress = get_next_avail(numPages);
-    if (virtualAddress == NULL) {
+    if (virtualAddress == NULL)
         return NULL;
-    }
 
     int i;
     for (i = 0; i < numPages; i++) {
         //Set virtual bitmap
+        set_bit_at_index(virtualMemoryBitmap, virtualAddress + i);
+
         //Find physical page
+        void* physicalAddress = get_physical_page();
+        if (physicalAddress == NULL)
+            return NULL;
+
         //Set physical bitmap
+        set_bit_at_index(physicalMemoryBitmap, physicalAddress);
+
         //use pagemap function
+        page_map(pageDirectory, ((unsigned long) virtualAddress + 1) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
     }
 
-    return virtualAddress;
+    return ((unsigned long) virtualAddress) * PGSIZE;
 }
 
 //Responsible for releasing one or more memory pages using virtual address (va).
@@ -231,7 +307,23 @@ void a_free(void *va, int size) {
      
        Part 2: Also, remove the translation from the TLB. */
      
-    
+    int numPages = size / PGSIZE;
+
+    int i;
+    for (i = 0; i < numPages; i++) {
+        pte_t* physicalAddress = translate(pageDirectory, (unsigned long) va + (i * PGSIZE));
+        if (physicalAddress ==  NULL) {
+            perror("Could not free a page that does not exist\n");
+            return;
+        }
+
+        unset_bit_at_index(virtualMemoryBitmap, (unsigned long) va / PGSIZE);
+        unset_bit_at_index(physicalMemoryBitmap, (unsigned long) physicalAddress / PGSIZE);
+
+        //Free actual memory?
+    }
+
+    return;
 }
 
 

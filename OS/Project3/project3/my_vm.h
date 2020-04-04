@@ -35,6 +35,7 @@ typedef struct tlb_ {
 
     unsigned long physicalMemoryAddress;
     unsigned long virtualMemoryAddress;
+    struct tlb_* next;
 } tlb;
 
 void set_physical_mem();
