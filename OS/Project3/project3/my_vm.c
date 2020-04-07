@@ -311,7 +311,7 @@ void a_free(void *va, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t* physicalAddress = translate(pageDirectory, (unsigned long) va + (i * PGSIZE));
+        pte_t* physicalAddress = (pte_t) translate(pageDirectory, (unsigned long) va + (i * PGSIZE));
         if (physicalAddress ==  NULL) {
             perror("Could not free a page that does not exist\n");
             return;
@@ -339,7 +339,7 @@ void put_value(void *va, void *val, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t physicalAddress = translate(pageDirectory, va + (i * PGSIZE));
+        pte_t physicalAddress =  translate(pageDirectory, va + (i * PGSIZE));
 
         *(physicalMemory + physicalAddress) = *(((char*) val) + (i * PGSIZE));
     }
@@ -374,8 +374,26 @@ void mat_mult(void *mat1, void *mat2, int size, void *answer) {
        load each element and perform multiplication. Take a look at test.c! In addition to 
        getting the values from two matrices, you will perform multiplication and 
        store the result to the "answer array". */
-
-       
+    int a, b, c = 0;
+    int addr_1, addr_2, addr_3 = 0;
+    int i, j, k; 
+    for (i = 0; i < size; i++) 
+    { 
+        for (j = 0; j < size; j++) 
+        { 
+            int val = 0;
+            for (k = 0; k < size; k++) 
+            {
+                addr_1 = (unsigned int)mat1 + ((i * size * sizeof(int))) + (k * sizeof(int));
+                addr_2 = (unsigned int)mat2 + ((k * size * sizeof(int))) + (j * sizeof(int));
+                get_value((void *)addr_1, &a, sizeof(int));
+                get_value((void *)addr_2, &b, sizeof(int));
+                val += (a*b);
+            }
+            addr_1 = (unsigned int)answer + ((i * size * sizeof(int))) + (j * sizeof(int));
+            put_value((void *)addr_3, &val, sizeof(int));
+        } 
+    }
 }
 
 
