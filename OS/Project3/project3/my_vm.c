@@ -76,8 +76,8 @@ void add_TLB(void *va, void *pa)
 {
     //Part 2 HINT: Add a virtual to physical page translation to the TLB
     tlb* newEntry = malloc(sizeof(tlb));
-    newEntry -> virtualMemoryAddress = va;
-    newEntry -> physicalMemoryAddress = pa;
+    newEntry -> virtualMemoryAddress = (unsigned long) va;
+    newEntry -> physicalMemoryAddress = (unsigned long) pa;
 
     if (currentTLBSize == TLB_ENTRIES) {
         tlb* currentEntry = TLBhead;
@@ -99,6 +99,33 @@ void add_TLB(void *va, void *pa)
     TLBhead = newEntry;
 }
 
+void remove_TLB(void *va) {
+    tlb* currentEntry = TLBhead;
+    tlb* previousEntry = NULL;
+
+    int i;
+    while (currentEntry != NULL) {
+        if (currentEntry -> virtualMemoryAddress == (unsigned long) va) {
+            if (previousEntry == NULL) {
+                tlb* removedEntry = TLBhead;
+                TLBhead = TLBhead -> next;
+
+                free(removedEntry);
+            } else {
+                previousEntry -> next = currentEntry -> next;
+
+                free(currentEntry);
+            }
+
+            currentTLBSize--;
+            return;
+        }
+
+        previousEntry = currentEntry;
+        currentEntry = currentEntry -> next;
+    }
+}
+
 /* Part 2: Check TLB for a valid translation.
    Returns the physical page address.
    Feel free to extend this function and change the return type. */
@@ -111,7 +138,7 @@ pte_t* check_TLB(void *va) {
         if (currentEntry -> virtualMemoryAddress == (unsigned long) va) {
             TLBHits++;
 
-            return currentEntry -> physicalMemoryAddress;
+            return (pte_t*) currentEntry -> physicalMemoryAddress;
         }
     }
 
@@ -134,7 +161,7 @@ void print_TLB_missrate()
 
 /* The function takes a virtual address and page directories starting address and
    performs translation to return the physical address. */
-pte_t *translate(pde_t *pgdir, void *va) {
+pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
     /* Part 1 HINT: Get the Page directory index (1st level) Then get the
        2nd-level-page table index using the virtual address.  Using the page
        directory index and page table index get the physical address.
@@ -156,7 +183,7 @@ pte_t *translate(pde_t *pgdir, void *va) {
     unsigned long virtualAddress = (unsigned long) va;
     unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
 
-    pte_t* pageDirectoryEntry = *(pgdir + pageTableAddress);
+    pte_t* pageDirectoryEntry = (pte_t*) *(pgdir + pageTableAddress);
     if (pageDirectoryEntry == NULL) {
         return NULL;
     }
@@ -164,9 +191,15 @@ pte_t *translate(pde_t *pgdir, void *va) {
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
     unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
-    pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
+    pte_t* pageTableEntry = (pte_t*) *(pageDirectoryEntry + physicalMemoryAddress);
     if (pageTableEntry == NULL) {
         return NULL;
+    }
+
+    if (isFreeing) {
+        free(pageDirectoryEntry + physicalMemoryAddress);
+
+        *(pageDirectoryEntry + physicalMemoryAddress) = NULL;
     }
 
     return pageTableEntry;
@@ -193,16 +226,16 @@ int page_map(pde_t *pgdir, void *va, void *pa)
         int totalEntries = pow(2, pageTableBits);
         *(pageTables + pageTableAddress) = malloc(totalEntries * PGSIZE);
 
-        *(pgdir + pageTableAddress) = *(pageTables + pageTableAddress);
+        *(pgdir + pageTableAddress) = (pte_t) *(pageTables + pageTableAddress);
     }
-    pte_t* pageDirectoryEntry = *(pgdir + pageTableAddress);
+    pte_t* pageDirectoryEntry = (pte_t*) *(pgdir + pageTableAddress);
 
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
     unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
     pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
     if (pageTableEntry == NULL) {
-        pageTableEntry = pa;
+        pageTableEntry = (pte_t) pa;
 
         add_TLB(va, pa);
 
@@ -247,7 +280,6 @@ void *get_physical_page() {
     return NULL;
 }
 
-//checking
 //Function responsible for allocating pages and used by the benchmark.
 void *a_malloc(unsigned int num_bytes) {
 
@@ -292,7 +324,7 @@ void *a_malloc(unsigned int num_bytes) {
         set_bit_at_index(physicalMemoryBitmap, physicalAddress);
 
         //use pagemap function
-        page_map(pageDirectory, ((unsigned long) virtualAddress + 1) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
+        page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
     }
 
     return ((unsigned long) virtualAddress) * PGSIZE;
@@ -311,7 +343,7 @@ void a_free(void *va, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t* physicalAddress = (pte_t) translate(pageDirectory, (unsigned long) va + (i * PGSIZE));
+        pte_t* physicalAddress = translate(pageDirectory, (unsigned long) va + (i * PGSIZE), 1);
         if (physicalAddress ==  NULL) {
             perror("Could not free a page that does not exist\n");
             return;
@@ -319,6 +351,8 @@ void a_free(void *va, int size) {
 
         unset_bit_at_index(virtualMemoryBitmap, (unsigned long) va / PGSIZE);
         unset_bit_at_index(physicalMemoryBitmap, (unsigned long) physicalAddress / PGSIZE);
+
+        remove_TLB(va + (i * PGSIZE));
 
         //Free actual memory?
     }
@@ -339,9 +373,9 @@ void put_value(void *va, void *val, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t physicalAddress =  translate(pageDirectory, va + (i * PGSIZE));
+        pte_t* physicalAddress =  translate(pageDirectory, va + (i * PGSIZE), 0);
 
-        *(physicalMemory + physicalAddress) = *(((char*) val) + (i * PGSIZE));
+        memcpy(physicalMemory + (unsigned long) physicalAddress, val + (i * PGSIZE), PGSIZE);
     }
 }
 
@@ -356,9 +390,9 @@ void get_value(void *va, void *val, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t physicalAddress = translate(pageDirectory, va + (i * PGSIZE));
+        pte_t* physicalAddress = translate(pageDirectory, va + (i * PGSIZE), 0);
 
-        *(((char*) val) + (i * PGSIZE)) = *(physicalMemory + physicalAddress);
+        memcpy(val + (i * PGSIZE), physicalMemory + (unsigned long) physicalAddress, PGSIZE);
     }
 }
 
