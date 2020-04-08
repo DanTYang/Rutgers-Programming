@@ -1,7 +1,6 @@
 #include "my_vm.h"
 
 char* physicalMemoryBitmap = NULL;
-//int numPagesLeft;
 
 char* virtualMemoryBitmap = NULL;
 
@@ -17,6 +16,8 @@ int currentTLBSize = 0;
 
 double TLBHits = 0;
 double TLBMisses = 0;
+
+pthread_mutex_t mutex;
 
 int get_bit_at_index(char* bitmap, int index) {
     char* region = bitmap + (index / 8);
@@ -290,6 +291,8 @@ void *a_malloc(unsigned int num_bytes) {
       free pages are available, set the bitmaps and map a new page. Note, you will 
       have to mark which physical pages are used. */
 
+    pthread_mutex_lock(&mutex);
+
     if (!isInitialized) {
         int offsetBits = log2(PGSIZE);
         int pageDirectoryBits = (32 - offsetBits) / 2;
@@ -327,6 +330,8 @@ void *a_malloc(unsigned int num_bytes) {
         page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
     }
 
+    pthread_mutex_unlock(&mutex);
+
     return ((unsigned long) virtualAddress) * PGSIZE;
 }
 
@@ -339,6 +344,8 @@ void a_free(void *va, int size) {
      
        Part 2: Also, remove the translation from the TLB. */
      
+    pthread_mutex_lock(&mutex);
+
     int numPages = (size / PGSIZE) + 1;
 
     int i;
@@ -356,6 +363,8 @@ void a_free(void *va, int size) {
 
         //Free actual memory?
     }
+
+    pthread_mutex_unlock(&mutex);
 
     return;
 }
