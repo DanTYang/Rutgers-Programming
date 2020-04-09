@@ -1,6 +1,7 @@
 #include "my_vm.h"
 
 char* physicalMemoryBitmap = NULL;
+//int numPagesLeft;
 
 char* virtualMemoryBitmap = NULL;
 
@@ -16,8 +17,7 @@ int currentTLBSize = 0;
 
 double TLBHits = 0;
 double TLBMisses = 0;
-
-pthread_mutex_t mutex;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int get_bit_at_index(char* bitmap, int index) {
     char* region = bitmap + (index / 8);
@@ -330,8 +330,6 @@ void *a_malloc(unsigned int num_bytes) {
         page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
     }
 
-    pthread_mutex_unlock(&mutex);
-
     return ((unsigned long) virtualAddress) * PGSIZE;
 }
 
@@ -343,7 +341,9 @@ void a_free(void *va, int size) {
        memory from "va" to va+size is valid.
      
        Part 2: Also, remove the translation from the TLB. */
-     
+
+
+       
     pthread_mutex_lock(&mutex);
 
     int numPages = (size / PGSIZE) + 1;
@@ -377,15 +377,38 @@ void put_value(void *va, void *val, int size) {
        the contents of "val" to a physical page. NOTE: The "size" value can be larger 
        than one page. Therefore, you may have to find multiple pages using translate()
        function. */
-
-    int numPages = (size / PGSIZE) + 1;
-
-    int i;
-    for (i = 0; i < numPages; i++) {
-        pte_t* physicalAddress =  translate(pageDirectory, va + (i * PGSIZE), 0);
-
-        memcpy(physicalMemory + (unsigned long) physicalAddress, val + (i * PGSIZE), PGSIZE);
+    pthread_mutex_lock(&mutex);
+    int numPages = (size / PGSIZE);
+    if(size % PGSIZE != 0)
+    {
+        numPages += 1;
     }
+    int temp = size;
+    int i;
+    for (i = 0; i < numPages; i++) 
+    {
+        if(temp <= 0)
+        {
+            break;
+        }
+        pte_t* physicalAddress =  translate(pageDirectory, va + (i * PGSIZE), 0);
+        if(physicalAddress == 0)
+        {
+            printf("physical address is at 0\n");
+            pthread_mutex_unlock(&mutex);
+            return;
+        }
+        if(temp < PGSIZE)
+        {
+            memcpy( (void*) physicalAddress, (void*) (val + i * PGSIZE), size);
+        }
+        else
+        {
+            memcpy( (void*) physicalAddress, val + i * PGSIZE, PGSIZE);
+            temp -= PGSIZE;
+        }
+    }
+    pthread_mutex_unlock(&mutex);
 }
 
 
@@ -394,15 +417,38 @@ void get_value(void *va, void *val, int size) {
 
     /* HINT: put the values pointed to by "va" inside the physical memory at given
        "val" address. Assume you can access "val" directly by derefencing them. */
-
-    int numPages = (size / PGSIZE) + 1;
-
+    pthread_mutex_lock(&mutex);
+    int numPages = (size / PGSIZE);
+    if(size % PGSIZE != 0)
+    {
+        numPages += 1;
+    }
+    int temp = size;
     int i;
     for (i = 0; i < numPages; i++) {
+        if(temp <= 0)
+        {
+            break;
+        }
         pte_t* physicalAddress = translate(pageDirectory, va + (i * PGSIZE), 0);
-
-        memcpy(val + (i * PGSIZE), physicalMemory + (unsigned long) physicalAddress, PGSIZE);
+        if(physicalAddress == 0)
+        {
+            printf("physical address is at 0\n");
+            pthread_mutex_unlock(&mutex);
+            return;
+        }
+        if(temp < PGSIZE)
+        {
+            memcpy(val + i * PGSIZE, (void*) physicalAddress, temp);
+        }
+        else
+        {
+            memcpy(val + i * PGSIZE, (void*) physicalAddress, PGSIZE);
+            temp -= PGSIZE;
+        }
+        
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 

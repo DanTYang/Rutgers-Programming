@@ -11,8 +11,11 @@ int main() {
     printf("Allocating three arrays of %d bytes\n", ARRAY_SIZE);
 
     void *a = a_malloc(ARRAY_SIZE);
+    printf("help\n");
     int old_a = (int)a;
+    printf("|%x|\n", (int) a);
     void *b = a_malloc(ARRAY_SIZE);
+    printf("help\n");
     void *c = a_malloc(ARRAY_SIZE);
     int x = 1;
     int y, z;
@@ -31,7 +34,7 @@ int main() {
             put_value((void *)address_b, &x, sizeof(int));
         }
     } 
-
+    
     printf("Fetching matrix elements stored in the arrays\n");
 
     for (i = 0; i < SIZE; i++) {
@@ -44,7 +47,7 @@ int main() {
         }
         printf("\n");
     } 
-
+    return 0;
     printf("Performing matrix multiplication with itself!\n");
     mat_mult(a, b, SIZE, c);
 
