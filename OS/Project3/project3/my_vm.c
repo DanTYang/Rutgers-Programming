@@ -222,20 +222,22 @@ int page_map(pde_t *pgdir, void *va, void *pa)
 
     unsigned long virtualAddress = (unsigned long) va;
     unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
-
+    //printf("a\n");
     if (*(pgdir + pageTableAddress) == NULL) {
+        //printf("b\n");
         int totalEntries = pow(2, pageTableBits);
         *(pageTables + pageTableAddress) = malloc(totalEntries * PGSIZE);
 
         *(pgdir + pageTableAddress) = (pte_t) *(pageTables + pageTableAddress);
     }
     pte_t* pageDirectoryEntry = (pte_t*) *(pgdir + pageTableAddress);
-
+    //printf("c\n");
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
     unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
     pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
     if (pageTableEntry == NULL) {
+        //printf("d\n");
         pageTableEntry = (pte_t) pa;
 
         add_TLB(va, pa);
@@ -253,9 +255,9 @@ void *get_next_avail(int num_pages) {
 
     unsigned long long numVirtualPages = MAX_MEMSIZE / (PGSIZE * 8);
     unsigned long long i;
-    for (i = 0; i < numVirtualPages; i++) {
+    for (i = 1; i < numVirtualPages; i++) {
         int currentBit = get_bit_at_index(virtualMemoryBitmap, i);
-
+        //printf("%d", currentBit);
         if (currentBit == 0) {
             length++;
             if (length == num_pages)
@@ -271,7 +273,7 @@ void *get_next_avail(int num_pages) {
 void *get_physical_page() {
     int numPhysicalPages = MEMSIZE / (PGSIZE * 8);
     int i;
-    for (i = 0; i < numPhysicalPages; i++) {
+    for (i = 1; i < numPhysicalPages; i++) {
         int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
 
         if (currentBit == 0)
@@ -292,6 +294,7 @@ void *a_malloc(unsigned int num_bytes) {
       have to mark which physical pages are used. */
 
     pthread_mutex_lock(&mutex);
+    //printf("mutex locked\n");
 
     if (!isInitialized) {
         int offsetBits = log2(PGSIZE);
@@ -301,15 +304,19 @@ void *a_malloc(unsigned int num_bytes) {
         int directoryEntries = pow(2, pageDirectoryBits);
 
         pageDirectory = malloc(directoryEntries * PGSIZE);
+        pageTables = pageDirectory;
 
         set_physical_mem();
 
         isInitialized = 1;
+
+        //printf("initialized\n");
     }
 
     int numPages = (num_bytes / PGSIZE) + 1;
 
     void* virtualAddress = get_next_avail(numPages);
+    //printf("got virtual address: %x\n", (int) virtualAddress);
     if (virtualAddress == NULL)
         return NULL;
 
@@ -320,6 +327,7 @@ void *a_malloc(unsigned int num_bytes) {
 
         //Find physical page
         void* physicalAddress = get_physical_page();
+        //printf("got physical address: %x\n", (int) physicalAddress);
         if (physicalAddress == NULL)
             return NULL;
 
@@ -328,9 +336,11 @@ void *a_malloc(unsigned int num_bytes) {
 
         //use pagemap function
         page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
+        //printf("page mapped\n");
     }
 
     pthread_mutex_unlock(&mutex);
+    //printf("mutex unlocked\n");
 
     return ((unsigned long) virtualAddress) * PGSIZE;
 }

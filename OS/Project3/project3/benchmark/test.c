@@ -26,7 +26,9 @@ int main() {
     for (i = 0; i < SIZE; i++) {
         for (j = 0; j < SIZE; j++) {
             address_a = (unsigned int)a + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
+            //printf("%x\n", (int) address_a);
             address_b = (unsigned int)b + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
+            //printf("%x\n", (int) address_b);
             put_value((void *)address_a, &x, sizeof(int));
             put_value((void *)address_b, &x, sizeof(int));
         }
@@ -40,9 +42,9 @@ int main() {
             address_b = (unsigned int)b + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
             get_value((void *)address_a, &y, sizeof(int));
             get_value( (void *)address_b, &z, sizeof(int));
-            printf("%d ", y);
+            //printf("%d ", y);
         }
-        printf("\n");
+        //printf("\n");
     } 
 
     printf("Performing matrix multiplication with itself!\n");
@@ -53,9 +55,9 @@ int main() {
         for (j = 0; j < SIZE; j++) {
             address_c = (unsigned int)c + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
             get_value((void *)address_c, &y, sizeof(int));
-            printf("%d ", y);
+            //printf("%d ", y);
         }
-        printf("\n");
+        //printf("\n");
     }
     printf("Freeing the allocations!\n");
     a_free(a, ARRAY_SIZE);
