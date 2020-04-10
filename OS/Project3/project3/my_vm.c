@@ -130,12 +130,14 @@ pte_t* check_TLB(void *va) {
     tlb* currentEntry = TLBhead;
 
     int i;
-    for (i = 0; i < currentTLBSize; i++) {
-        if (currentEntry -> virtualMemoryAddress == (unsigned long) va) {
+    while (currentEntry != NULL) {
+        if ((int) currentEntry -> virtualMemoryAddress == (int) va) {
             TLBHits++;
 
             return (pte_t*) currentEntry -> physicalMemoryAddress;
         }
+
+        currentEntry = currentEntry -> next;
     }
 
     TLBMisses++;
@@ -150,7 +152,7 @@ void print_TLB_missrate()
     double miss_rate = 0;	
 
     //Part 2 Code here to calculate and print the TLB miss rate.
-    miss_rate = (TLBHits + TLBMisses)  / TLBMisses;
+    miss_rate = TLBMisses  / (TLBMisses + TLBHits);
 
     fprintf(stderr, "TLB miss rate %lf \n", miss_rate);
 }
@@ -169,9 +171,9 @@ pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
 
     if (!isFreeing) {
         pte_t* physicalAddress = check_TLB(va);
-        if (physicalAddress != NULL) {
+
+        if (physicalAddress != NULL)
             return physicalAddress;
-        }
     }
 
     int offsetBits = log2(PGSIZE);
@@ -194,14 +196,13 @@ pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
         return NULL;
     }
 
-    if (isFreeing) {
-        free(pageDirectoryEntry + physicalMemoryAddress);
-
-        *(pageDirectoryEntry + physicalMemoryAddress) = NULL;
-    }
-
     outerBitsMask = (1 << offsetBits) - 1;
     unsigned long offsetAddress = virtualAddress & outerBitsMask;
+
+    if (isFreeing)
+        *(pageDirectoryEntry + physicalMemoryAddress) = NULL;
+    else
+        add_TLB(va, (unsigned long) pageTableEntry + offsetAddress);
 
     return (unsigned long) pageTableEntry + offsetAddress;
 }
@@ -479,7 +480,7 @@ void mat_mult(void *mat1, void *mat2, int size, void *answer) {
                 get_value((void *)addr_2, &b, sizeof(int));
                 val += (a*b);
             }
-            addr_1 = (unsigned int)answer + ((i * size * sizeof(int))) + (j * sizeof(int));
+            addr_3 = (unsigned int)answer + ((i * size * sizeof(int))) + (j * sizeof(int));
             put_value((void *)addr_3, &val, sizeof(int));
         } 
     }

@@ -34,7 +34,7 @@ int main() {
             put_value((void *)address_b, &x, sizeof(int));
         }
     } 
-    
+
     printf("Fetching matrix elements stored in the arrays\n");
 
     for (i = 0; i < SIZE; i++) {
@@ -70,6 +70,8 @@ int main() {
         printf("free function works\n");
     else
         printf("free function does not work\n");
+
+    print_TLB_missrate();
 
     return 0;
 }
