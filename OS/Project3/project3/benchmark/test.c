@@ -4,18 +4,15 @@
 #include "../my_vm.h"
 
 #define SIZE 5
-#define ARRAY_SIZE 400
+#define ARRAY_SIZE 10000
 
 int main() {
 
     printf("Allocating three arrays of %d bytes\n", ARRAY_SIZE);
 
     void *a = a_malloc(ARRAY_SIZE);
-    //printf("help\n");
     int old_a = (int)a;
-    //printf("|%x|\n", (int) a);
     void *b = a_malloc(ARRAY_SIZE);
-    //printf("help\n");
     void *c = a_malloc(ARRAY_SIZE);
     int x = 1;
     int y, z;

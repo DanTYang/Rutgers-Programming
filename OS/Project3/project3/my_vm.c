@@ -200,11 +200,11 @@ pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
     unsigned long offsetAddress = virtualAddress & outerBitsMask;
 
     if (isFreeing)
-        *(pageDirectoryEntry + physicalMemoryAddress) = NULL;
+        *(pageDirectoryEntry + physicalMemoryAddress) = 0;
     else
-        add_TLB(va, (unsigned long) pageTableEntry + offsetAddress);
+        add_TLB(va, (void*) ((unsigned long) pageTableEntry + offsetAddress));
 
-    return (unsigned long) pageTableEntry + offsetAddress;
+    return (pte_t*) ((unsigned long) pageTableEntry + offsetAddress);
 }
 
 /* The function takes a page directory address, virtual address, physical address
@@ -224,7 +224,7 @@ int page_map(pde_t *pgdir, void *va, void *pa)
     unsigned long virtualAddress = (unsigned long) va;
     unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
 
-    if (*(pgdir + pageTableAddress) == NULL) {
+    if (*(pgdir + pageTableAddress) == 0) {
         int totalEntries = pow(2, pageTableBits);
         *(pageTables + pageTableAddress) = malloc(totalEntries * PGSIZE);
 
@@ -236,7 +236,7 @@ int page_map(pde_t *pgdir, void *va, void *pa)
     unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
     pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
-    if (pageTableEntry == NULL) {
+    if (pageTableEntry == 0) {
         *(pageDirectoryEntry + physicalMemoryAddress) = (pte_t) pa;
 
         add_TLB(va, pa);
@@ -253,14 +253,14 @@ void *get_next_avail(int num_pages) {
     int length = 0;
 
     unsigned long long numVirtualPages = MAX_MEMSIZE / (PGSIZE * 8);
-    unsigned long long i;
+    int i;
     for (i = 1; i < numVirtualPages; i++) {
         int currentBit = get_bit_at_index(virtualMemoryBitmap, i);
 
         if (currentBit == 0) {
             length++;
             if (length == num_pages)
-                return i - num_pages + 1;
+                return (void*) (i - num_pages + 1);
         } else {
             length = 0;
         }
@@ -277,7 +277,7 @@ void *get_physical_page() {
         int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
 
         if (currentBit == 0)
-            return i;
+            return (void*) i;
     }
 
     return NULL;
@@ -303,7 +303,7 @@ void *a_malloc(unsigned int num_bytes) {
         int directoryEntries = pow(2, pageDirectoryBits);
 
         pageDirectory = malloc(directoryEntries * PGSIZE);
-        pageTables = pageDirectory;
+        pageTables = (pte_t**) pageDirectory;
 
         set_physical_mem();
 
@@ -320,20 +320,20 @@ void *a_malloc(unsigned int num_bytes) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        set_bit_at_index(virtualMemoryBitmap, virtualAddress + i);
+        set_bit_at_index(virtualMemoryBitmap, (int) (virtualAddress + i));
 
         void* physicalAddress = get_physical_page();
         if (physicalAddress == NULL)
             return NULL;
 
-        set_bit_at_index(physicalMemoryBitmap, physicalAddress);
+        set_bit_at_index(physicalMemoryBitmap, (int) physicalAddress);
 
-        page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
+        page_map(pageDirectory, (void*) (((unsigned long) virtualAddress + i) * PGSIZE), (void*) (((unsigned long) physicalAddress) * PGSIZE));
     }
 
     pthread_mutex_unlock(&mutex);
 
-    return ((unsigned long) virtualAddress) * PGSIZE;
+    return (void*) (((unsigned long) virtualAddress) * PGSIZE);
 }
 
 //Responsible for releasing one or more memory pages using virtual address (va).
@@ -353,13 +353,13 @@ void a_free(void *va, int size) {
 
     int i;
     for (i = 0; i < numPages; i++) {
-        pte_t* physicalAddress = translate(pageDirectory, (unsigned long) va + (i * PGSIZE), 1);
+        pte_t* physicalAddress = translate(pageDirectory, (void*) ((unsigned long) va + (i * PGSIZE)), 1);
         if (physicalAddress ==  NULL) {
             perror("Could not free a page that does not exist\n");
             return;
         }
 
-        unset_bit_at_index(virtualMemoryBitmap, (unsigned long) va / PGSIZE);
+        unset_bit_at_index(virtualMemoryBitmap, (unsigned long) va / PGSIZE + i);
         unset_bit_at_index(physicalMemoryBitmap, (unsigned long) physicalAddress / PGSIZE);
 
         remove_TLB(va + (i * PGSIZE));
