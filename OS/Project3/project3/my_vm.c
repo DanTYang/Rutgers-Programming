@@ -1,7 +1,6 @@
 #include "my_vm.h"
 
 char* physicalMemoryBitmap = NULL;
-//int numPagesLeft;
 
 char* virtualMemoryBitmap = NULL;
 
@@ -33,8 +32,6 @@ void set_bit_at_index(char* bitmap, int index) {
     char bit = 1 << (index % 8);
 
     *region |= bit;
-
-    return;
 }
 
 void unset_bit_at_index(char* bitmap, int index) {
@@ -43,8 +40,6 @@ void unset_bit_at_index(char* bitmap, int index) {
     char bit = 1 << (index % 8);
 
     *region &= ~bit;
-
-    return;
 }
 
 // Function responsible for allocating and setting your physical memory 
@@ -172,9 +167,11 @@ pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
 
     //If translation not successfull return null
 
-    pte_t* physicalAddress = check_TLB(va);
-    if (physicalAddress != NULL) {
-        return physicalAddress;
+    if (!isFreeing) {
+        pte_t* physicalAddress = check_TLB(va);
+        if (physicalAddress != NULL) {
+            return physicalAddress;
+        }
     }
 
     int offsetBits = log2(PGSIZE);
@@ -203,7 +200,10 @@ pte_t *translate(pde_t *pgdir, void *va, int isFreeing) {
         *(pageDirectoryEntry + physicalMemoryAddress) = NULL;
     }
 
-    return pageTableEntry;
+    outerBitsMask = (1 << offsetBits) - 1;
+    unsigned long offsetAddress = virtualAddress & outerBitsMask;
+
+    return (unsigned long) pageTableEntry + offsetAddress;
 }
 
 /* The function takes a page directory address, virtual address, physical address
@@ -222,23 +222,21 @@ int page_map(pde_t *pgdir, void *va, void *pa)
 
     unsigned long virtualAddress = (unsigned long) va;
     unsigned long pageTableAddress = virtualAddress >> (offsetBits + pageTableBits);
-    //printf("a\n");
+
     if (*(pgdir + pageTableAddress) == NULL) {
-        //printf("b\n");
         int totalEntries = pow(2, pageTableBits);
         *(pageTables + pageTableAddress) = malloc(totalEntries * PGSIZE);
 
         *(pgdir + pageTableAddress) = (pte_t) *(pageTables + pageTableAddress);
     }
     pte_t* pageDirectoryEntry = (pte_t*) *(pgdir + pageTableAddress);
-    //printf("c\n");
+
     unsigned long outerBitsMask = (1 << pageTableBits) - 1;
     unsigned long physicalMemoryAddress = (virtualAddress >> offsetBits) & outerBitsMask;
 
     pte_t pageTableEntry = *(pageDirectoryEntry + physicalMemoryAddress);
     if (pageTableEntry == NULL) {
-        //printf("d\n");
-        pageTableEntry = (pte_t) pa;
+        *(pageDirectoryEntry + physicalMemoryAddress) = (pte_t) pa;
 
         add_TLB(va, pa);
 
@@ -257,7 +255,7 @@ void *get_next_avail(int num_pages) {
     unsigned long long i;
     for (i = 1; i < numVirtualPages; i++) {
         int currentBit = get_bit_at_index(virtualMemoryBitmap, i);
-        //printf("%d", currentBit);
+
         if (currentBit == 0) {
             length++;
             if (length == num_pages)
@@ -272,6 +270,7 @@ void *get_next_avail(int num_pages) {
 
 void *get_physical_page() {
     int numPhysicalPages = MEMSIZE / (PGSIZE * 8);
+
     int i;
     for (i = 1; i < numPhysicalPages; i++) {
         int currentBit = get_bit_at_index(physicalMemoryBitmap, i);
@@ -294,7 +293,6 @@ void *a_malloc(unsigned int num_bytes) {
       have to mark which physical pages are used. */
 
     pthread_mutex_lock(&mutex);
-    //printf("mutex locked\n");
 
     if (!isInitialized) {
         int offsetBits = log2(PGSIZE);
@@ -309,38 +307,30 @@ void *a_malloc(unsigned int num_bytes) {
         set_physical_mem();
 
         isInitialized = 1;
-
-        //printf("initialized\n");
     }
 
     int numPages = (num_bytes / PGSIZE) + 1;
+    if(num_bytes % PGSIZE == 0)
+        numPages -= 1;
 
     void* virtualAddress = get_next_avail(numPages);
-    //printf("got virtual address: %x\n", (int) virtualAddress);
     if (virtualAddress == NULL)
         return NULL;
 
     int i;
     for (i = 0; i < numPages; i++) {
-        //Set virtual bitmap
         set_bit_at_index(virtualMemoryBitmap, virtualAddress + i);
 
-        //Find physical page
         void* physicalAddress = get_physical_page();
-        //printf("got physical address: %x\n", (int) physicalAddress);
         if (physicalAddress == NULL)
             return NULL;
 
-        //Set physical bitmap
         set_bit_at_index(physicalMemoryBitmap, physicalAddress);
 
-        //use pagemap function
         page_map(pageDirectory, ((unsigned long) virtualAddress + i) * PGSIZE, ((unsigned long) physicalAddress) * PGSIZE);
-        //printf("page mapped\n");
     }
 
     pthread_mutex_unlock(&mutex);
-    //printf("mutex unlocked\n");
 
     return ((unsigned long) virtualAddress) * PGSIZE;
 }
@@ -353,12 +343,12 @@ void a_free(void *va, int size) {
        memory from "va" to va+size is valid.
      
        Part 2: Also, remove the translation from the TLB. */
-
-
        
     pthread_mutex_lock(&mutex);
 
     int numPages = (size / PGSIZE) + 1;
+    if(size % PGSIZE == 0)
+        numPages -= 1;
 
     int i;
     for (i = 0; i < numPages; i++) {
@@ -372,8 +362,6 @@ void a_free(void *va, int size) {
         unset_bit_at_index(physicalMemoryBitmap, (unsigned long) physicalAddress / PGSIZE);
 
         remove_TLB(va + (i * PGSIZE));
-
-        //Free actual memory?
     }
 
     pthread_mutex_unlock(&mutex);
@@ -406,17 +394,17 @@ void put_value(void *va, void *val, int size) {
         pte_t* physicalAddress =  translate(pageDirectory, va + (i * PGSIZE), 0);
         if(physicalAddress == 0)
         {
-            printf("physical address is at 0\n");
+            printf("put:physical address is at 0\n");
             pthread_mutex_unlock(&mutex);
             return;
         }
         if(temp < PGSIZE)
         {
-            memcpy( (void*) physicalAddress, (void*) (val + i * PGSIZE), size);
+            memcpy( (void*) &physicalMemory[(int) physicalAddress], (void*) (val + i * PGSIZE), size);
         }
         else
         {
-            memcpy( (void*) physicalAddress, val + i * PGSIZE, PGSIZE);
+            memcpy( (void*) &physicalMemory[(int) physicalAddress], (void*) val + i * PGSIZE, PGSIZE);
             temp -= PGSIZE;
         }
     }
@@ -445,17 +433,17 @@ void get_value(void *va, void *val, int size) {
         pte_t* physicalAddress = translate(pageDirectory, va + (i * PGSIZE), 0);
         if(physicalAddress == 0)
         {
-            printf("physical address is at 0\n");
+            printf("get:physical address is at 0\n");
             pthread_mutex_unlock(&mutex);
             return;
         }
         if(temp < PGSIZE)
         {
-            memcpy(val + i * PGSIZE, (void*) physicalAddress, temp);
+            memcpy((void*) val + i * PGSIZE, (void*) &physicalMemory[(int) physicalAddress], temp);
         }
         else
         {
-            memcpy(val + i * PGSIZE, (void*) physicalAddress, PGSIZE);
+            memcpy((void*) val + i * PGSIZE, (void*) &physicalMemory[(int) physicalAddress], PGSIZE);
             temp -= PGSIZE;
         }
         

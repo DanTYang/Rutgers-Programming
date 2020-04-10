@@ -11,11 +11,11 @@ int main() {
     printf("Allocating three arrays of %d bytes\n", ARRAY_SIZE);
 
     void *a = a_malloc(ARRAY_SIZE);
-    printf("help\n");
+    //printf("help\n");
     int old_a = (int)a;
-    printf("|%x|\n", (int) a);
+    //printf("|%x|\n", (int) a);
     void *b = a_malloc(ARRAY_SIZE);
-    printf("help\n");
+    //printf("help\n");
     void *c = a_malloc(ARRAY_SIZE);
     int x = 1;
     int y, z;
@@ -29,9 +29,7 @@ int main() {
     for (i = 0; i < SIZE; i++) {
         for (j = 0; j < SIZE; j++) {
             address_a = (unsigned int)a + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
-            //printf("%x\n", (int) address_a);
             address_b = (unsigned int)b + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
-            //printf("%x\n", (int) address_b);
             put_value((void *)address_a, &x, sizeof(int));
             put_value((void *)address_b, &x, sizeof(int));
         }
@@ -44,23 +42,22 @@ int main() {
             address_a = (unsigned int)a + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
             address_b = (unsigned int)b + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
             get_value((void *)address_a, &y, sizeof(int));
-            get_value( (void *)address_b, &z, sizeof(int));
-            //printf("%d ", y);
+            get_value((void *)address_b, &z, sizeof(int));
+            printf("%d ", y);
         }
-        //printf("\n");
+        printf("\n");
     } 
-    return 0;
+    
     printf("Performing matrix multiplication with itself!\n");
     mat_mult(a, b, SIZE, c);
-
 
     for (i = 0; i < SIZE; i++) {
         for (j = 0; j < SIZE; j++) {
             address_c = (unsigned int)c + ((i * SIZE * sizeof(int))) + (j * sizeof(int));
             get_value((void *)address_c, &y, sizeof(int));
-            //printf("%d ", y);
+            printf("%d ", y);
         }
-        //printf("\n");
+        printf("\n");
     }
     printf("Freeing the allocations!\n");
     a_free(a, ARRAY_SIZE);
