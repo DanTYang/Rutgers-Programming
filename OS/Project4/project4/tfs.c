@@ -34,12 +34,26 @@ struct superblock* superblock = NULL;
 int get_avail_ino() {
 
 	// Step 1: Read inode bitmap from disk
-	
+	char* buffer = (char*) malloc(sizeof(char) * BLOCK_SIZE);
+	char* ibuffer = (char*) malloc(sizeof(char) * (MAX_INUM / 8));
+	bio_read(1, (void*) buffer);
+	int i = 0;
+	for(i = 0; i < (MAX_INUM / 8); i++)
+	{
+		ibuffer[i] = buffer[i];
+	}
+	bitmap_t bit = (bitmap_t) ibuffer;
 	// Step 2: Traverse inode bitmap to find an available slot
-
-	// Step 3: Update inode bitmap and write to disk 
-
-	return 0;
+	for(i = 0; i < MAX_INUM; i++)
+	{
+		if(get_bitmap(bit, i) == 0)
+		{
+			set_bitmap(bit, i);
+			bio_write(1, (void*) bit);
+			return i;
+		}
+	}
+	return -1;
 }
 
 /* 
@@ -48,12 +62,27 @@ int get_avail_ino() {
 int get_avail_blkno() {
 
 	// Step 1: Read data block bitmap from disk
-	
+
+	char* buffer = (char*) malloc(sizeof(char) * BLOCK_SIZE);
+	char* dbuffer = (char*) malloc(sizeof(char) * (MAX_DNUM / 8));
+	bio_read(2, (void*) buffer);
+	int i = 0;
+	for(i = 0; i < (MAX_DNUM / 8); i++)
+	{
+		dbuffer[i] = buffer[i];
+	}
+	bitmap_t bit = (bitmap_t) dbuffer;
 	// Step 2: Traverse data block bitmap to find an available slot
-
-	// Step 3: Update data block bitmap and write to disk 
-
-	return 0;
+	for(i = 0; i < MAX_DNUM; i++)
+	{
+		if(get_bitmap(bit, i) == 0)
+		{
+			set_bitmap(bit, i);
+			bio_write(2, (void*) bit);
+			return i;
+		}
+	}
+	return -1;
 }
 
 /* 
