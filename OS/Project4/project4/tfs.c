@@ -26,7 +26,8 @@ char diskfile_path[PATH_MAX];
 
 // Declare your in-memory data structures here
 struct superblock* superblock = NULL;
-
+bitmap_t dataBlockBitmap = NULL;
+bitmap_t inodeBitmap = NULL;
 
 /* 
  * Get available inode number from bitmap
@@ -158,11 +159,11 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 
 		// Step 3: Read directory's data block and check each directory entry.
 		//If the name matches, then copy directory entry to dirent structure
+		int maxDirent = BLOCK_SIZE / sizeof(struct dirent);
 		struct dirent* currentDirent = malloc(sizeof(struct dirent));
 
-		int direntNum = BLOCK_SIZE / sizeof(struct dirent);
 		int j;
-		for (j = 0; j < direntNum; j++) {
+		for (j = 0; j < maxDirent; j++) {
 			memcpy(currentDirent, dataBlock + j * sizeof(struct dirent), sizeof(struct dirent));
 
 			if (currentDirent -> valid == 1 && currentDirent -> len == name_len) {
@@ -175,18 +176,18 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 
 					free(direntName);
 					free(currentDirent);
+					free(dataBlock);
 					free(inode);
 
 					return 1;
 				}
 
 				free(direntName);
-			} else {
-				continue;
 			}
 		}
 
 		free(currentDirent);
+		free(dataBlock);
 	}
 
 	free(inode);
@@ -208,6 +209,65 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 
 	// Write directory entry
 
+	int i;
+	for (i = 0; i < 16; i++) {
+		int dataBlockNumber = dir_inode.direct_ptr[i];
+
+		if (dataBlockNumber == 0) {
+			int maxDirent = BLOCK_SIZE / sizeof(struct dirent);
+			struct dirent* newDirents = malloc(sizeof(struct dirent) * maxDirent);
+
+			newDirents -> ino = f_ino;
+			memcpy(newDirents -> name, fname, name_len);
+			newDirents -> len = name_len;
+			newDirents -> valid = 1;
+
+			int i;
+			for (i = 1; i < maxDirent; i++)
+				(newDirents + i * sizeof(struct dirent)) -> valid = 0;
+
+			int newDataBlockNum = get_avail_blkno();
+			bio_write(newDataBlockNum, newDirents);
+
+			dir_inode.direct_ptr[i] = newDataBlockNum;
+
+			writei(dir_inode.ino, &dir_inode);
+
+			free(newDirents);
+
+			return 1;
+		}
+
+		void* dataBlock = malloc(BLOCK_SIZE);
+		bio_read(dataBlockNumber, dataBlock);
+
+		int maxDirent = BLOCK_SIZE / sizeof(struct dirent);
+		struct dirent* currentDirent = malloc(sizeof(struct dirent));
+
+		int i;
+		for (i = 0; i < maxDirent; i++) {
+			memcpy(currentDirent, dataBlock + i * sizeof(struct dirent), sizeof(struct dirent));
+
+			if (currentDirent -> valid == 0) {
+				currentDirent -> ino = f_ino;
+				memcpy(currentDirent -> name, fname, name_len);
+				currentDirent -> len = name_len;
+				currentDirent -> valid = 1;
+
+				memcpy(dataBlock + i * sizeof(struct dirent), currentDirent, sizeof(struct dirent));
+				bio_write(dataBlockNumber, dataBlock);
+
+				free(currentDirent);
+				free(dataBlock);
+
+				return 1;
+			}
+		}
+
+		free(currentDirent);
+		free(dataBlock);
+	}
+
 	return 0;
 }
 
@@ -219,6 +279,47 @@ int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
 
 	// Step 3: If exist, then remove it from dir_inode's data block and write to disk
 
+	int i;
+	for (i = 0; i < 16; i++) {
+		int dataBlockNumber = dir_inode.direct_ptr[i];
+		if (dataBlockNumber == 0)
+			continue;
+
+		void* dataBlock = malloc(BLOCK_SIZE);
+		bio_read(dataBlockNumber, dataBlock);
+
+		int maxDirent = BLOCK_SIZE / sizeof(struct dirent);
+		struct dirent* currentDirent = malloc(sizeof(struct dirent));
+
+		int j;
+		for (j = 0; j < maxDirent; j++) {
+			memcpy(currentDirent, dataBlock + j * sizeof(struct dirent), sizeof(struct dirent));
+
+			if (currentDirent -> valid == 1 && currentDirent -> len == name_len) {
+				char* direntName = malloc(currentDirent -> len);
+				memcpy(direntName, currentDirent -> name, currentDirent -> len);
+
+				if (strcmp(fname, direntName) == 0) {
+					currentDirent -> valid = 0;
+
+					memcpy(dataBlock + j * sizeof(struct dirent), currentDirent, sizeof(struct dirent));
+					bio_write(dataBlockNumber, dataBlock);
+
+					free(direntName);
+					free(currentDirent);
+					free(dataBlock);
+
+					return 1;
+				}
+
+				free(direntName);
+			}
+		}
+
+		free(currentDirent);
+		free(dataBlock);
+	}
+
 	return 0;
 }
 
@@ -229,6 +330,20 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
+	char* pathName = strtok(path + 1, "/");
+	int inodeNumber = ino;
+	struct dirent* dirent = malloc(sizeof(struct dirent));
+
+	do {
+		dir_find(inodeNumber, pathName, strlen(pathName), dirent);
+
+		inodeNumber = dirent -> ino;
+		pathName = strtok(NULL, "/");
+	} while (pathName != NULL);
+
+	readi(inodeNumber, inode);
+
+	free(dirent);
 
 	return 0;
 }
@@ -237,18 +352,63 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
  * Make file system
  */
 int tfs_mkfs() {
+	int counter = 1;
 
 	// Call dev_init() to initialize (Create) Diskfile
+	dev_init(diskfile_path);
 
 	// write superblock information
+	superblock = malloc(sizeof(struct superblock));
+	superblock -> magic_num = MAGIC_NUM;
+	superblock -> max_inum = MAX_INUM;
+	superblock -> max_dnum = MAX_DNUM;
 
 	// initialize inode bitmap
+	int numBytes = MAX_INUM / 8;
+	inodeBitmap = malloc(numBytes);
+
+	int i;
+	for (i = 0; i < numBytes; i++)
+		*(inodeBitmap + i) = 0;
+
+	superblock -> i_bitmap_blk = counter;
+	counter += (numBytes / BLOCK_SIZE) + 1;
 
 	// initialize data block bitmap
+	numBytes = MAX_DNUM / 8;
+	dataBlockBitmap = malloc(numBytes);
+
+	for (i = 0; i < numBytes; i++)
+		*(dataBlockBitmap + i) = 0;
+
+	superblock -> d_bitmap_blk = counter;
+	counter += (numBytes / BLOCK_SIZE) + 1;
+
+	superblock -> i_start_blk = counter;
+
+	int inodePerBlock = BLOCK_SIZE / sizeof(struct inode);
+	int numInodeBlocks = (MAX_INUM / inodePerBlock) + 1;
+	if (MAX_INUM % inodePerBlock)
+		numInodeBlocks--;
+
+	counter += numInodeBlocks + 1;
+
+	superblock -> d_start_blk = counter;
+
+	bio_write(0, superblock);
 
 	// update bitmap information for root directory
+	set_bitmap(inodeBitmap, 0);
+
+	for (i = 0; i < superblock -> d_bitmap_blk; i++)
+		set_bitmap(dataBlockBitmap, i);
+
+	bio_write(superblock -> i_bitmap_blk, inodeBitmap);
+	bio_write(superblock -> d_bitmap_blk, dataBlockBitmap);
 
 	// update inode for root directory
+
+	//Have to create all inodes?
 
 	return 0;
 }
@@ -261,8 +421,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 
 	// Step 1a: If disk file is not found, call mkfs
 
-  // Step 1b: If disk file is found, just initialize in-memory data structures
-  // and read superblock from disk
+  	// Step 1b: If disk file is found, just initialize in-memory data structures
+  	// and read superblock from disk
 
 	return NULL;
 }
