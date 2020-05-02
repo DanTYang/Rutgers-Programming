@@ -188,6 +188,8 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 					free(dataBlock);
 					free(inode);
 
+					printf("Found!\n");
+
 					return 1;
 				}
 
@@ -200,6 +202,8 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 	}
 
 	free(inode);
+
+	printf("Leaving dir_find\n");
 
 	return 0;
 }
@@ -243,6 +247,8 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 
 			free(dirInode);
 			free(newDirents);
+
+			printf("Leaving dir_add\n");
 
 			return 1;
 		}
@@ -368,6 +374,8 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	free(pathCopy);
 	free(dirent);
 
+	printf("Leaving get_node_by_path\n");
+
 	return 0;
 }
 
@@ -459,6 +467,8 @@ int tfs_mkfs() {
 	free(root);
 	free(stat);
 
+	printf("Leaving tfs_mkfs\n");
+
 	return 0;
 }
 
@@ -471,6 +481,8 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 	int open = dev_open(diskfile_path);
 	if (open != 0) {
 		tfs_mkfs();
+
+		printf("Leaving tfs_init\n");
 
 		return NULL;
 	}
@@ -533,9 +545,41 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 		return -ENOENT;
 	}
 
+	/*
+	printf("Inode number: %d\n", inode -> ino);
+	printf("Valid: %d\n", inode -> valid);
+	printf("Type: %d\n", inode -> type);
+	printf("Link: %d\n", inode -> link);
+	struct inode* test = malloc(sizeof(struct inode));
+	readi(0, test);
+	printf("Inode number: %d\n", test -> ino);
+	printf("Valid: %d\n", test -> valid);
+	printf("Type: %d\n", test -> type);
+	printf("Link: %d\n", test -> link);
+	printf("Dirent number: %d\n", test -> direct_ptr[0]);
+	struct dirent* test2 = malloc(sizeof(struct dirent));
+	void* buffer = malloc(BLOCK_SIZE);
+	bio_read(test -> direct_ptr[0], buffer);
+	memcpy(test2, buffer, sizeof(struct dirent));
+	printf("Inode number: %d\n", test2 -> ino);
+	printf("Valid: %d\n", test2 -> valid);
+	printf("Length: %d\n", test2 -> len);
+	printf("Name: %s\n", test2 -> name);
+	*/
+
 	// Step 2: fill attribute of file into stbuf from inode
-	stbuf = &(inode -> vstat);
-	free(inode);	
+	stbuf -> st_ino = inode -> vstat.st_ino;
+	stbuf -> st_mode = inode -> vstat.st_mode;
+	stbuf -> st_nlink = inode -> vstat.st_nlink;
+	stbuf -> st_uid = inode -> vstat.st_uid;
+	stbuf -> st_gid = inode -> vstat.st_gid;
+	stbuf -> st_size = inode -> vstat.st_size;
+	stbuf -> st_atime = inode -> vstat.st_atime;
+	stbuf -> st_mtime = inode -> vstat.st_mtime;
+
+	//free(inode);	
+
+	printf("Leaving tfs_getattr\n");
 
 	return 0;
 }
@@ -549,7 +593,7 @@ static int tfs_opendir(const char *path, struct fuse_file_info *fi) {
 	// Step 2: If not find, return -1
 	free(inode);
 	if (found == -1)
-		return -1;
+		return -ENOENT;
 	else
     	return 0;
 }
@@ -641,7 +685,7 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 	if (found == 1) {
 		free(dirInode);
 
-		return -1;
+		return -ENOENT;
 	}
 
 	// Step 3: Call get_avail_ino() to get an available inode number
@@ -800,7 +844,7 @@ static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		free(baseName);
 		free(dirInode);
 
-		return -1;
+		return -ENOENT;
 	}
 
 	// Step 3: Call get_avail_ino() to get an available inode number
@@ -821,6 +865,7 @@ static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	newInode -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
+	stat -> st_ino = newInode -> ino;
 	stat -> st_mode = S_IFREG | mode;
 	stat -> st_nlink = 1;
 	stat -> st_uid = getuid();
@@ -840,6 +885,8 @@ static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	free(dirName);
 	free(baseName);
 
+	printf("Leaving tfs_create\n");
+
 	return 0;
 }
 
@@ -852,7 +899,7 @@ static int tfs_open(const char *path, struct fuse_file_info *fi) {
 	// Step 2: If not find, return -1
 	free(inode);
 	if (found == -1)
-		return -1;
+		return -ENOENT;
 	else
     	return 0;
 }
@@ -1045,6 +1092,7 @@ static int tfs_release(const char *path, struct fuse_file_info *fi) {
 	printf("Entering tfs_release\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
+	printf("Leaving tfs_release\n");
 	return 0;
 }
 
