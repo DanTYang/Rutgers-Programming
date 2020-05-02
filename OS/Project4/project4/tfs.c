@@ -445,13 +445,12 @@ int tfs_mkfs() {
 	root -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
-	stat -> st_mode = __S_IFDIR | 0755;
+	stat -> st_mode = S_IFDIR | 0755;
 	stat -> st_nlink = 2;
 	stat -> st_uid = getuid();
 	stat -> st_gid = getgid();
-	stat -> st_size = 0;
-	time(&(stat -> st_mtime));
-	time(&(stat -> st_mtime));
+	stat -> st_atime = time(NULL);
+	stat -> st_mtime = time(NULL);
 
 	root -> vstat = *stat;
 
@@ -513,7 +512,7 @@ static void *tfs_init(struct fuse_conn_info *conn) {
 }
 
 static void tfs_destroy(void *userdata) {
-
+	printf("Entering tfs_destroy\n");
 	// Step 1: De-allocate in-memory data structures
 	free(superblock);
 	free(inodeBitmap);
@@ -542,7 +541,7 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 }
 
 static int tfs_opendir(const char *path, struct fuse_file_info *fi) {
-
+	printf("Entering tfs_opendir\n");
 	// Step 1: Call get_node_by_path() to get inode from path
 	struct inode* inode = malloc(sizeof(struct inode));
 	int found = get_node_by_path(path, 0, inode);
@@ -556,7 +555,7 @@ static int tfs_opendir(const char *path, struct fuse_file_info *fi) {
 }
 
 static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
-
+	printf("Entering tfs_readdir\n");
 	// Step 1: Call get_node_by_path() to get inode from path
 	struct inode* inode = malloc(sizeof(struct inode));
 	int found = get_node_by_path(path, 0, inode);
@@ -604,7 +603,7 @@ static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, o
 
 
 static int tfs_mkdir(const char *path, mode_t mode) {
-
+	printf("Entering tfs_mkdir\n");
 	// Step 1: Use dirname() and basename() to separate parent directory path and target directory name
 	int final = 0;
 
@@ -663,13 +662,13 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 	newInode -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
-	stat -> st_mode = mode;
+	stat -> st_mode = S_IFDIR | mode;
 	stat -> st_nlink = 2;
 	stat -> st_uid = getuid();
 	stat -> st_gid = getgid();
 	stat -> st_size = 0;
-	time(&(stat -> st_mtime));
-	time(&(stat -> st_mtime));
+	stat -> st_atime = time(NULL);
+	stat -> st_mtime = time(NULL);
 
 	newInode -> vstat = *stat;
 
@@ -686,7 +685,7 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 }
 
 static int tfs_rmdir(const char *path) {
-
+	printf("Entering tfs_rmdir\n");
 	// Step 1: Use dirname() and basename() to separate parent directory path and target directory name
 	int final = 0;
 
@@ -754,6 +753,7 @@ static int tfs_rmdir(const char *path) {
 }
 
 static int tfs_releasedir(const char *path, struct fuse_file_info *fi) {
+	printf("Entering tfs_releasedir\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
     return 0;
@@ -821,13 +821,13 @@ static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	newInode -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
-	stat -> st_mode = mode;
+	stat -> st_mode = S_IFREG | mode;
 	stat -> st_nlink = 1;
 	stat -> st_uid = getuid();
 	stat -> st_gid = getgid();
 	stat -> st_size = 0;
-	time(&(stat -> st_mtime));
-	time(&(stat -> st_mtime));
+	stat -> st_atime = time(NULL);
+	stat -> st_mtime = time(NULL);
 
 	newInode -> vstat = *stat;
 
@@ -844,7 +844,7 @@ static int tfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 }
 
 static int tfs_open(const char *path, struct fuse_file_info *fi) {
-
+	printf("Entering tfs_open\n");
 	// Step 1: Call get_node_by_path() to get inode from path
 	struct inode* inode = malloc(sizeof(struct inode));
 	int found = get_node_by_path(path, 0, inode);
@@ -858,7 +858,7 @@ static int tfs_open(const char *path, struct fuse_file_info *fi) {
 }
 
 static int tfs_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi) {
-
+	printf("Entering tfs_read\n");
 	// Step 1: You could call get_node_by_path() to get inode from path
 	struct inode* inode = malloc(sizeof(struct inode));
 	int found = get_node_by_path(path, 0, inode);
@@ -910,7 +910,7 @@ static int tfs_read(const char *path, char *buffer, size_t size, off_t offset, s
 }
 
 static int tfs_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *fi) {
-
+	printf("Entering tfs_write\n");
 	// Step 1: You could call get_node_by_path() to get inode from path
 	struct inode* inode = malloc(sizeof(struct inode));
 	int found = get_node_by_path(path, 0, inode);
@@ -969,7 +969,7 @@ static int tfs_write(const char *path, const char *buffer, size_t size, off_t of
 }
 
 static int tfs_unlink(const char *path) {
-
+	printf("Entering tfs_unlink\n");
 	// Step 1: Use dirname() and basename() to separate parent directory path and target file name
 	int final = 0;
 
@@ -1035,24 +1035,28 @@ static int tfs_unlink(const char *path) {
 }
 
 static int tfs_truncate(const char *path, off_t size) {
+	printf("Entering tfs_truncate\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
     return 0;
 }
 
 static int tfs_release(const char *path, struct fuse_file_info *fi) {
+	printf("Entering tfs_release\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
 	return 0;
 }
 
 static int tfs_flush(const char * path, struct fuse_file_info * fi) {
+	printf("Entering tfs_flush\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
     return 0;
 }
 
 static int tfs_utimens(const char *path, const struct timespec tv[2]) {
+	printf("Entering tfs_utimens\n");
 	// For this project, you don't need to fill this function
 	// But DO NOT DELETE IT!
     return 0;
