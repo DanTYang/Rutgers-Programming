@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 	}
 	printf("TEST 6: Directory create success \n");
 
-	
+
 	/* Sub-directory creation test */
 	for (i = 0; i < N_FILES; ++i) {
 		char subdir_path[FSPATHLEN];
