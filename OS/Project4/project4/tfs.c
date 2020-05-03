@@ -181,14 +181,12 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
 				memcpy(direntName, currentDirent -> name, currentDirent -> len);
 
 				if (strncmp(fname, direntName, name_len) == 0) {
-					dirent = currentDirent;
+					*dirent = *currentDirent;
 
 					free(direntName);
 					free(currentDirent);
 					free(dataBlock);
 					free(inode);
-
-					printf("Found!\n");
 
 					return 1;
 				}
@@ -259,9 +257,9 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 		int direntPerBlock = BLOCK_SIZE / sizeof(struct dirent);
 		struct dirent* currentDirent = malloc(sizeof(struct dirent));
 
-		int i;
-		for (i = 0; i < direntPerBlock; i++) {
-			memcpy(currentDirent, dataBlock + i * sizeof(struct dirent), sizeof(struct dirent));
+		int j;
+		for (j = 0; j < direntPerBlock; j++) {
+			memcpy(currentDirent, dataBlock + j * sizeof(struct dirent), sizeof(struct dirent));
 
 			if (currentDirent -> valid == 0) {
 				currentDirent -> ino = f_ino;
@@ -269,11 +267,13 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 				currentDirent -> len = name_len;
 				currentDirent -> valid = 1;
 
-				memcpy(dataBlock + i * sizeof(struct dirent), currentDirent, sizeof(struct dirent));
+				memcpy(dataBlock + j * sizeof(struct dirent), currentDirent, sizeof(struct dirent));
 				bio_write(dataBlockNumber, dataBlock);
 
 				free(currentDirent);
 				free(dataBlock);
+
+				printf("Leaving dir_add\n");
 
 				return 1;
 			}
@@ -282,6 +282,8 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 		free(currentDirent);
 		free(dataBlock);
 	}
+
+	//printf("Leaving dir_add\n");
 
 	return 0;
 }
@@ -347,6 +349,7 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	// Note: You could either implement it in a iterative way or recursive way
 	if (strlen(path) == 1) {
 		readi(0, inode);
+		printf("Leaving get_node_by_path\n");
 
 		return 0;
 	}
@@ -453,6 +456,7 @@ int tfs_mkfs() {
 	root -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
+	stat -> st_ino = 0;
 	stat -> st_mode = S_IFDIR | 0755;
 	stat -> st_nlink = 2;
 	stat -> st_uid = getuid();
@@ -577,7 +581,7 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 	stbuf -> st_atime = inode -> vstat.st_atime;
 	stbuf -> st_mtime = inode -> vstat.st_mtime;
 
-	//free(inode);	
+	free(inode);	
 
 	printf("Leaving tfs_getattr\n");
 
@@ -684,6 +688,8 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 	int found = dir_find(dirInode -> ino, baseName, strlen(path) - final - 1, newDirent);
 	if (found == 1) {
 		free(dirInode);
+		free(baseName);
+		free(dirInode);
 
 		return -ENOENT;
 	}
@@ -706,6 +712,7 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 	newInode -> indirect_ptr[8] = 0;
 
 	struct stat* stat = malloc(sizeof(struct stat));
+	stat -> st_ino = newInode -> ino;
 	stat -> st_mode = S_IFDIR | mode;
 	stat -> st_nlink = 2;
 	stat -> st_uid = getuid();
@@ -974,6 +981,10 @@ static int tfs_write(const char *path, const char *buffer, size_t size, off_t of
 	int amountCopiedLeft = size;
 	while (currentBlock < 16 && amountCopiedLeft > 0) {
 		int dataBlockNumber = inode -> direct_ptr[currentBlock];
+		if (dataBlockNumber == 0) {
+			dataBlockNumber = get_avail_blkno();
+			inode -> direct_ptr[currentBlock] = dataBlockNumber;
+		}
 
 		void* dataBlock = malloc(BLOCK_SIZE);
 		bio_read(dataBlockNumber, dataBlock);

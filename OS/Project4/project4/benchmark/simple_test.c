@@ -38,9 +38,7 @@ int main(int argc, char **argv) {
 		//memset with some random data
 		memset(buf, 0x61 + i, BLOCKSIZE);
 
-		int a = write(fd, buf, BLOCKSIZE);
-		if (a != BLOCKSIZE) {
-			printf("write: %d", a);
+		if (write(fd, buf, BLOCKSIZE) != BLOCKSIZE) {
 			printf("TEST 2: File write failure \n");
 			exit(1);
 		}
