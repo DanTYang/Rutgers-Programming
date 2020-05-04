@@ -152,15 +152,15 @@ int main(int argc, char **argv) {
 		}
 	}
 	printf("TEST 8: Sub-directory create success \n");
+/*
 
-
-	/* TEST 9: Large file write-read test */
+	/* TEST 9: Large file write-read test /
 	if ((fd = creat(TESTDIR "/largefile", FILEPERM)) < 0) {
 		perror("creat large file fail");
 		exit(1);
 	}
 
-	/* Perform sequential writes */
+	/* Perform sequential writes /
 	for (i = 0; i < ITERS_LARGE; i++) {
 		//memset with some random data
 		memset(buf, 0x61 + i % 26, BLOCKSIZE);
@@ -179,27 +179,27 @@ int main(int argc, char **argv) {
 	printf("TEST 9: Large file write success \n");
 
 
-	/* Close operation */	
+	/* Close operation /	
 	if (close(fd) < 0) {
 		perror("close largefile");
 		exit(1);
 	}
 
-	/* Open for reading */
+	/* Open for reading /
 	if ((fd = open(TESTDIR "/largefile", FILEPERM)) < 0) {
 		perror("open");
 		exit(1);
 	}
 
 
-	/* TEST 10: Large file read test */
+	/* TEST 10: Large file read test /
 	if (pread(fd, buf, BLOCKSIZE, 1000*BLOCKSIZE) != BLOCKSIZE) {
 		perror("pread");
 		printf("TEST 10: Large file read failure \n");
 		exit(1);
 	}
     
-	/* Verify file content */
+	/* Verify file content /
 	if (buf[0] != 0x61 + 1000 % 26) {
 		perror("pread");
 		printf("TEST 10: Large file read failure \n");
@@ -208,7 +208,7 @@ int main(int argc, char **argv) {
 
 	printf("TEST 10: Large file read Success \n");
 	close(fd);	
-
+	*/
 
 	printf("Benchmark completed \n");
 	return 0;
